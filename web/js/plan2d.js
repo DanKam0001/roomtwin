@@ -319,8 +319,32 @@ export class PlanView {
     this.drawWalls(st);
 
     if (ov) this.drawOverlay(ov);
+    const hl = st.highlightWall && this.drawWallHighlight(st.highlightWall);
     this.drawScaleBar();
-    if (ov && !ov.ok && (ov.corner || ov.stuck)) { this.pulse = (this.pulse + 1) % 1000; this.requestRender(); }
+    if (hl || (ov && !ov.ok && (ov.corner || ov.stuck))) { this.pulse = (this.pulse + 1) % 1000; this.requestRender(); }
+  }
+
+  // Scan coach: pulse the wall the coach wants rescanned. Returns true while drawn (keeps animating).
+  drawWallHighlight(h) {
+    const ctx = this.ctx, w = this.world, s = this.view.s;
+    const wall = w.walls.find((x) => x.id === h.wall && (!h.room || x.roomId === h.room)) || w.walls.find((x) => x.key === h.wall);
+    if (!wall) return false;
+    const k = 0.5 + 0.5 * Math.sin(performance.now() / 260);
+    const mid = scale(wall.normalIn, -WALL_T / 2);
+    const a = add(wall.a, mid), b = add(wall.b, mid);
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = `rgba(227,182,95,${0.18 + 0.3 * k})`; ctx.lineWidth = 14 + 12 * k;
+    this.line(a, b);
+    ctx.strokeStyle = C.warn; ctx.lineWidth = 3.5;
+    this.line(a, b);
+    ctx.restore();
+    const c = add(add(wall.a, scale(wall.dir, wall.geomLength / 2)), scale(wall.normalIn, 30 / s));
+    const p = this.toScreen(c);
+    let ang = Math.atan2(wall.dir[1], wall.dir[0]);
+    if (ang > Math.PI / 2) ang -= Math.PI; if (ang < -Math.PI / 2) ang += Math.PI;
+    this.text(h.label || `Rescan wall ${wall.id}`, p, 12.5, '#ffe2a8', 'center', true, ang, C.warn);
+    return true;
   }
 
   drawGrid() {

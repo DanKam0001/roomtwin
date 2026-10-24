@@ -8,7 +8,8 @@ import { orientationPhrase } from './logistics/doorfit.js';
 import { PlanView } from './plan2d.js';
 import { loadFromUrl, loadFromFiles, sourceForSave } from './loader.js';
 import { CATALOGUE, ITEM_COLOURS } from './catalogue.js';
-import { extractFromUrl } from './api.js';
+import { extractFromUrl, uploadScan, coachScan, scanRoomUrl, SCAN_EXT } from './api.js';
+import { scanCardHtml } from './scancheck.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -22,6 +23,8 @@ const S = {
   view: 'plan', snap: true, labels: true, ceiling: false, mesh: true,
   status: {}, fits: {}, routes: {}, order: null, overlay: null, hidden: new Set(), locked: false,
   stamp: 0, orderIndex: null, nextId: 1,
+  // uploaded scans: the open attempt, this session's attempts, a running coach call, the wall to pulse on the plan
+  scan: null, attempts: [], coachRun: null, highlightWall: null, traceOpen: false,
 };
 
 // ---------------------------------------------------------------- views
@@ -152,6 +155,9 @@ async function loadSource(src) {
     if (src.layout.entry && world.openings.some((o) => o.key === src.layout.entry)) S.entryKey = src.layout.entry;
     for (const it of src.layout.items || []) addItemRaw({ ...it, id: undefined });
   }
+  S.scan = src.scan || null;
+  S.highlightWall = null;
+  setScanParam(S.scan?.id || null);
   $('#empty').hidden = true;
   document.body.classList.remove('no-room');
   $('#optMeshWrap').hidden = true;
@@ -160,6 +166,8 @@ async function loadSource(src) {
   else if (Object.keys(src.meshUrls || {}).length) ensureScene().catch(() => {});
   refreshAll();
   renderRoomCard();
+  renderScanCard();
+  if (S.scan?.coach) applyCoach(S.scan.coach, false);
   renderEntry();
   renderOrder();
   const t = world.kind === 'house' ? `${world.rooms.length} rooms` : `${world.rooms[0].area.toFixed(1)} m²`;
@@ -180,6 +188,199 @@ async function openUrl(url) {
 
 async function openFiles(files) {
   try { await loadSource(await loadFromFiles(files)); } catch (err) { toast(err.message || String(err), 'bad', 6000); }
+}
+
+// ---------------------------------------------------------------- scan upload + coach
+// Upload a raw scan -> the server runs the OpenCV pipeline -> load its room.json.
+// Attempts are kept for the session so a rescan loop reads as attempt 1, 2, ...
+const ATTEMPTS_KEY = 'roomtwin.scanAttempts';
+function loadAttempts() {
+  try { const a = JSON.parse(sessionStorage.getItem(ATTEMPTS_KEY) || '[]'); return Array.isArray(a) ? a : []; } catch { return []; }
+}
+function saveAttempts() {
+  try { sessionStorage.setItem(ATTEMPTS_KEY, JSON.stringify(S.attempts.slice(-8))); } catch { /* storage unavailable */ }
+}
+const nextAttemptN = () => S.attempts.reduce((m, a) => Math.max(m, a.n || 0), 0) + 1;
+
+function setScanParam(id) {
+  try {
+    const u = new URL(location.href);
+    if (id) { u.searchParams.set('scan', id); u.searchParams.delete('room'); u.searchParams.delete('layout'); } else u.searchParams.delete('scan');
+    if (u.href !== location.href) history.replaceState(null, '', u);
+  } catch { /* sandboxed */ }
+}
+
+async function openScan(attempt) {
+  const src = await loadFromUrl(scanRoomUrl(attempt.id));
+  attempt.coverage = src.raw.coverage?.score ?? attempt.coverage ?? null;
+  if (!attempt.qa?.length) attempt.qa = src.raw.qa || [];
+  if (!src.raw.name) src.raw = { ...src.raw, name: `Room scan ${attempt.n}` };
+  src.scan = attempt;
+  await loadSource(src);
+  saveAttempts();
+}
+
+async function openScanById(id) {
+  let a = S.attempts.find((x) => x.id === id);
+  const isNew = !a;
+  if (isNew) { a = { id, n: nextAttemptN(), coverage: null, processing_s: null, qa: [], coach: null }; S.attempts.push(a); }
+  try {
+    await openScan(a);
+    return true;
+  } catch (err) {
+    if (isNew) S.attempts = S.attempts.filter((x) => x !== a);
+    if (!S.scan) setScanParam(null);
+    toast(`Could not open that scan: ${err.message || err}`, 'bad', 6000);
+    return false;
+  }
+}
+
+const mb = (b) => `${(b / 1048576).toFixed(b < 10485760 ? 1 : 0)} MB`;
+const up = {
+  box: $('#uploadBox'), card: $('#uploadBox .up-card'), title: $('#upTitle'), file: $('#upFile'), bar: $('#upBar'), fill: $('#upFill'),
+  pct: $('#upPct'), size: $('#upSize'), note: $('#upNote'), cancel: $('#upCancel'), retry: $('#upRetry'), spin: $('#upSpin'),
+  job: null, phase: '', timer: 0,
+};
+
+function upShow(file) {
+  clearInterval(up.timer);
+  up.phase = 'upload';
+  up.box.hidden = false;
+  up.card.classList.remove('bad');
+  up.spin.hidden = false;
+  up.title.textContent = 'Uploading your scan';
+  up.file.textContent = `${file.name} · ${mb(file.size)}`;
+  up.bar.className = 'up-bar';
+  up.fill.style.width = '0%';
+  up.pct.textContent = '0%';
+  up.size.textContent = `0 of ${mb(file.size)}`;
+  up.note.textContent = 'Keep this page open until it finishes.';
+  up.cancel.textContent = 'Cancel';
+  up.retry.hidden = true;
+}
+
+function upProgress(loaded, total) {
+  if (up.phase !== 'upload') return;
+  const p = total ? Math.min(1, loaded / total) : 0;
+  up.fill.style.width = `${(p * 100).toFixed(1)}%`;
+  up.pct.textContent = `${Math.floor(p * 100)}%`;
+  up.size.textContent = `${mb(loaded)} of ${mb(total)}`;
+}
+
+function upMeasuring() {
+  if (up.phase !== 'upload') return;
+  up.phase = 'measure';
+  up.title.textContent = 'Measuring your room with OpenCV…';
+  up.bar.className = 'up-bar indet';
+  up.size.textContent = 'uploaded';
+  up.note.textContent = 'Finding the floor, walls, doors and ceiling, and checking what the scan missed. Takes a few seconds to about a minute.';
+  const t0 = performance.now();
+  up.pct.textContent = '0 s';
+  up.timer = setInterval(() => { up.pct.textContent = `${Math.round((performance.now() - t0) / 1000)} s`; }, 500);
+}
+
+function upError(msg) {
+  clearInterval(up.timer);
+  up.phase = 'error';
+  up.card.classList.add('bad');
+  up.spin.hidden = true;
+  up.title.textContent = 'That scan did not go through';
+  up.bar.className = 'up-bar bad';
+  up.pct.textContent = ''; up.size.textContent = '';
+  up.note.textContent = msg;
+  up.cancel.textContent = 'Close';
+  up.retry.hidden = false;
+}
+
+function upHide() { clearInterval(up.timer); up.phase = ''; up.box.hidden = true; }
+
+async function startScanUpload(file) {
+  if (!file) return;
+  if (!SCAN_EXT.test(file.name)) { toast('Upload a .ply, .obj or .zip from the scanner app.', 'bad', 5000); return; }
+  if (file.size > 400 * 1048576) { toast('That file is over the 400 MB limit.', 'bad', 5000); return; }
+  up.job?.abort();
+  upShow(file);
+  const job = up.job = uploadScan(file, {
+    onProgress: (loaded, total) => { upProgress(loaded, total); if (total && loaded >= total) upMeasuring(); },
+    onUploaded: upMeasuring,
+  });
+  try {
+    const res = await job.promise;
+    if (up.job !== job) return;
+    clearInterval(up.timer);
+    up.title.textContent = 'Loading the plan…';
+    const attempt = { id: res.id, n: nextAttemptN(), coverage: null, processing_s: res.processing_s ?? null, qa: res.qa || [], coach: null, file: file.name };
+    S.attempts.push(attempt);
+    try { await openScan(attempt); } catch (err) {
+      S.attempts = S.attempts.filter((x) => x !== attempt);
+      throw new Error(`Measured, but the plan would not load: ${err.message}`);
+    }
+    upHide();
+    if (isSheetLayout()) document.body.classList.remove('sheet-collapsed');
+    $('#panel').scrollTop = 0;
+    toast(`Measured in ${res.processing_s ?? '?'} s. Ask the coach whether the scan is good enough.`, 'ok', 5000);
+  } catch (err) {
+    if (up.job !== job) return;
+    if (err.name === 'AbortError') upHide(); else upError(err.message || String(err));
+  } finally {
+    if (up.job === job) up.job = null;
+  }
+}
+
+function pickScan() { const el = $('#scanInput'); el.value = ''; el.click(); }
+
+function renderScanCard() {
+  const card = $('#scanCard');
+  const sc = S.scan;
+  card.hidden = !sc;
+  $('#qaList').hidden = !!sc; // the scan card lists the QA instead
+  if (!sc) return;
+  const run = S.coachRun?.id === sc.id ? S.coachRun : null;
+  card.innerHTML = scanCardHtml({ scan: sc, attempts: S.attempts, coach: run || sc.coach, traceOpen: S.traceOpen });
+}
+
+function applyCoach(res, fresh) {
+  S.highlightWall = res.decision === 'rescan' && res.wall_id ? { wall: res.wall_id, label: `Rescan wall ${res.wall_id}` } : null;
+  if (fresh && S.highlightWall && S.view !== 'plan') setView('plan');
+  plan.requestRender();
+}
+
+function showWall(id) {
+  if (!S.world?.walls.some((w) => w.id === id)) { toast(`Wall ${id} is not in this plan.`); return; }
+  S.highlightWall = { wall: id, label: S.scan?.coach?.decision === 'rescan' && S.scan.coach.wall_id === id ? `Rescan wall ${id}` : `Wall ${id}` };
+  if (S.view !== 'plan') setView('plan');
+  plan.requestRender();
+}
+
+async function askCoach() {
+  const sc = S.scan;
+  if (!sc || (S.coachRun?.pending && S.coachRun.id === sc.id)) return;
+  const run = S.coachRun = { id: sc.id, pending: true, elapsed: 0 };
+  const t0 = performance.now();
+  const tick = setInterval(() => {
+    run.elapsed = Math.round((performance.now() - t0) / 1000);
+    const el = $('#scanCard [data-elapsed]');
+    if (el && S.coachRun === run) el.textContent = ` · ${run.elapsed} s`;
+  }, 1000);
+  S.highlightWall = null;
+  plan.requestRender();
+  renderScanCard();
+  try {
+    const res = await coachScan(sc.id);
+    sc.coach = res;
+    if (res.coverage != null) sc.coverage = res.coverage;
+    saveAttempts();
+    if (S.coachRun === run) S.coachRun = null;
+    if (S.scan === sc) applyCoach(res, true);
+  } catch (err) {
+    if (S.coachRun === run) S.coachRun = { id: sc.id, error: err.message || String(err), status: err.status };
+  } finally {
+    clearInterval(tick);
+  }
+  if (S.scan === sc) {
+    renderScanCard();
+    $('#scanCard .coach')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
 }
 
 // ---------------------------------------------------------------- items
@@ -841,6 +1042,22 @@ function wire() {
   const pick = () => fileInput.click();
   $('#btnOpen').addEventListener('click', pick);
   $('#btnOpen2').addEventListener('click', pick);
+  $('#btnScan').addEventListener('click', pickScan);
+  $('#btnScan2').addEventListener('click', pickScan);
+  $('#scanInput').addEventListener('change', (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) startScanUpload(f); });
+  up.cancel.addEventListener('click', () => { const j = up.job; up.job = null; j?.abort(); upHide(); });
+  up.retry.addEventListener('click', () => { upHide(); pickScan(); });
+  const scanCard = $('#scanCard');
+  scanCard.addEventListener('click', (e) => {
+    const el = e.target.closest('[data-act]');
+    if (!el) return;
+    const act = el.dataset.act;
+    if (act === 'coach') askCoach();
+    else if (act === 'rescan') pickScan();
+    else if (act === 'showwall') showWall(el.dataset.wall);
+    else if (act === 'openscan' && el.dataset.scan !== S.scan?.id) openScanById(el.dataset.scan);
+  });
+  scanCard.addEventListener('toggle', (e) => { if (e.target.matches?.('details.trace')) S.traceOpen = e.target.open; }, true);
   fileInput.addEventListener('change', () => { if (fileInput.files.length) openFiles(fileInput.files); fileInput.value = ''; });
   $('#sampleSel').addEventListener('change', (e) => { if (e.target.value) openUrl(e.target.value); e.target.value = ''; });
   $$('.sample').forEach((b) => b.addEventListener('click', () => openUrl(b.dataset.src)));
@@ -914,16 +1131,22 @@ function wire() {
   window.addEventListener('dragover', (e) => e.preventDefault());
   window.addEventListener('drop', (e) => {
     e.preventDefault(); dragDepth = 0; $('#dropHint').hidden = true;
-    if (e.dataTransfer?.files?.length) openFiles(e.dataTransfer.files);
+    const files = [...(e.dataTransfer?.files || [])];
+    const scanFile = files.find((f) => SCAN_EXT.test(f.name));
+    if (scanFile) startScanUpload(scanFile);
+    else if (files.length) openFiles(files);
   });
 
   const qs = new URLSearchParams(location.search);
   const room = qs.get('room') || qs.get('layout');
   const view = qs.get('view');
-  if (room) openUrl(room).then((ok) => { if (ok && view && ['plan', 'orbit', '3d', 'walk'].includes(view)) setView(view === '3d' ? 'orbit' : view); });
+  const scanId = qs.get('scan');
+  S.attempts = loadAttempts();
+  if (scanId) openScanById(scanId).then((ok) => { if (ok && view && ['plan', 'orbit', '3d', 'walk'].includes(view)) setView(view === '3d' ? 'orbit' : view); });
+  else if (room) openUrl(room).then((ok) => { if (ok && view && ['plan', 'orbit', '3d', 'walk'].includes(view)) setView(view === '3d' ? 'orbit' : view); });
 }
 
 wire();
 
 // Exposed for debugging and automated checks.
-window.roomtwin = { S, setView, openUrl, addItem, checkRoute, planOrder, playOrder, select, setEntry, CATALOGUE, plan, get scene() { return scene; } };
+window.roomtwin = { S, setView, openUrl, addItem, checkRoute, planOrder, playOrder, select, setEntry, startScanUpload, openScanById, askCoach, CATALOGUE, plan, get scene() { return scene; } };

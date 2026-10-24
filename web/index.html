@@ -30,6 +30,9 @@
       <button data-view="walk">Walk</button>
     </nav>
     <div class="actions">
+      <button class="btn accent hero" id="btnScan" title="Upload a .ply, .obj or .zip from your scanner app">
+        <svg viewBox="0 0 24 24"><path d="M4 8V5h3M17 5h3v3M20 16v3h-3M7 19H4v-3M12 15V8m0 0-3 3m3-3 3 3"/></svg><span class="full">Upload scan</span><span class="short">Scan</span>
+      </button>
       <button class="btn ghost" id="btnOpen" title="Open room.json, house.json or a saved layout">
         <svg viewBox="0 0 24 24"><path d="M4 7h6l2 2h8v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/></svg><span>Open</span>
       </button>
@@ -48,6 +51,7 @@
       </button>
     </div>
     <input type="file" id="fileInput" accept=".json,.glb,.gltf,application/json" multiple hidden>
+    <input type="file" id="scanInput" accept=".ply,.obj,.zip,application/zip,application/octet-stream" hidden>
   </header>
 
   <main>
@@ -82,10 +86,14 @@
       <div id="empty" class="empty">
         <div class="empty-card">
           <h1>Your room, measured.</h1>
-          <p>Load the <code>room.json</code> from a scan to see it in plan, 3D and walk mode, place furniture, and check it gets through the door.</p>
+          <p>Upload a scan from your phone's LiDAR scanner app. RoomTwin measures the walls, doors and ceiling, checks the scan is good enough, then lets you place furniture and check it gets through the door.</p>
+          <button class="btn accent herobig" id="btnScan2" type="button">
+            <svg viewBox="0 0 24 24"><path d="M4 8V5h3M17 5h3v3M20 16v3h-3M7 19H4v-3M12 15V8m0 0-3 3m3-3 3 3"/></svg>
+            <span><b>Upload scan</b><small>.ply, .obj or .zip from your scanner app</small></span>
+          </button>
           <div class="drop" id="dropZone">
             <svg viewBox="0 0 24 24"><path d="M12 16V5m0 0-4 4m4-4 4 4M5 19h14"/></svg>
-            <span>Drop <b>room.json</b> or <b>house.json</b> here</span>
+            <span>Or drop a scan, <b>room.json</b> or <b>house.json</b> here</span>
             <button class="btn" id="btnOpen2">Choose file</button>
           </div>
           <div class="samples">
@@ -97,11 +105,23 @@
         </div>
       </div>
       <div id="dropHint" class="drophint" hidden><div>Drop to load</div></div>
+      <div id="uploadBox" class="uploadbox" hidden role="dialog" aria-modal="true" aria-labelledby="upTitle">
+        <div class="up-card">
+          <div class="up-h"><span class="spin" id="upSpin"></span><b id="upTitle">Uploading</b></div>
+          <div class="up-file" id="upFile"></div>
+          <div class="up-bar" id="upBar"><i id="upFill"></i></div>
+          <div class="up-meta"><span id="upPct"></span><span id="upSize"></span></div>
+          <p class="subtle" id="upNote"></p>
+          <div class="row end gap"><button class="btn ghost small" id="upCancel" type="button">Cancel</button><button class="btn accent small" id="upRetry" type="button" hidden>Choose another file</button></div>
+        </div>
+      </div>
       <div id="toasts" aria-live="polite"></div>
     </section>
 
     <aside id="panel" aria-label="Details">
       <button class="sheet-handle" id="sheetHandle" aria-label="Expand panel"><span></span></button>
+
+      <section class="card scancard" id="scanCard" hidden aria-live="polite"></section>
 
       <section class="card" id="roomCard">
         <div class="card-h"><h2>Room</h2><span class="muted small" id="roomSource"></span></div>
