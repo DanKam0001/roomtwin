@@ -1,0 +1,41 @@
+flowchart LR
+  subgraph P["Perception (OpenCV 5)"]
+    SCAN["Uploaded scan<br/>attempt n"]
+    PIPE["roomtwin.process<br/>walls + sigma, openings,<br/>coverage gaps, QA codes"]
+    EVID["Evidence files<br/>room.json<br/>walls/&lt;id&gt;.png occupancy images<br/>floorplan.png"]
+  end
+
+  subgraph D["Decision (Claude, tool use, max 8 turns)"]
+    SUM["get_scan_summary"]
+    VW["view_wall(wall_id)"]
+    VF["view_floorplan"]
+    CHOOSE{"Plan usable?"}
+  end
+
+  subgraph A["Action (exactly one)"]
+    ACC["accept_scan<br/>summary + caveats"]
+    RES["request_rescan<br/>wall_id + one physical instruction"]
+    ASK["ask_user<br/>question only the person can answer"]
+  end
+
+  subgraph H["Human control (web app)"]
+    UI["Scan check card<br/>decision, readable trace,<br/>wall pulsed on the plan"]
+    PERSON["Person decides:<br/>rescan and upload,<br/>answer, or ignore"]
+  end
+
+  LOG[("coach_trace.json<br/>events.jsonl")]
+
+  SCAN --> PIPE --> EVID
+  EVID --> SUM --> CHOOSE
+  EVID --> VW --> CHOOSE
+  EVID --> VF --> CHOOSE
+  CHOOSE -- "yes" --> ACC
+  CHOOSE -- "fixable by rescanning" --> RES
+  CHOOSE -- "ambiguous" --> ASK
+  ACC --> UI
+  RES --> UI
+  ASK --> UI
+  UI --> PERSON
+  PERSON -- "new scan = attempt n+1" --> SCAN
+  D -.-> LOG
+  A -.-> LOG

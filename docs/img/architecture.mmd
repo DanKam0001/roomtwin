@@ -1,0 +1,34 @@
+flowchart LR
+  subgraph USER["Person at home"]
+    PHONE["iPhone 14 Pro LiDAR<br/>3d Scanner App<br/>export .ply / .obj / .zip"]
+    BROWSER["Browser: RoomTwin web app<br/>three.js plan / 3D / walk<br/>door fit, route search, build order<br/>(Web Worker, no build step)"]
+  end
+
+  subgraph AWS["AWS EC2 t4g.medium (Graviton, Ubuntu 24.04 arm64)"]
+    SG["Security group<br/>443 / 80 open, SSH 22 from one IP"]
+    CADDY["Caddy<br/>automatic HTTPS<br/>54-226-102-179.sslip.io<br/>400 MB body limit"]
+    API["FastAPI + uvicorn<br/>systemd roomtwin.service<br/>127.0.0.1:8000"]
+    PIPE["OpenCV 5 pipeline<br/>python -m roomtwin.process<br/>(subprocess, 900 s timeout)"]
+    COACH["Scan coach agent<br/>server/coach.py"]
+    EXTRACT["Furniture link extraction<br/>server/extract.py"]
+    STORE[("/var/lib/roomtwin/scans/&lt;id&gt;<br/>room.json, house.json, floorplan.png,<br/>walls/*.png, pipeline.log,<br/>events.jsonl, coach_trace.json")]
+    ENV["/etc/roomtwin.env (mode 600)<br/>API key, never in the repo"]
+    CAP["Daily cap on model calls<br/>ROOMTWIN_LLM_DAILY_CAP = 300"]
+  end
+
+  LLM["Anthropic Messages API<br/>Claude (tool use, image input)"]
+  SHOP["Furniture product pages"]
+
+  PHONE -- "scan file" --> BROWSER
+  BROWSER -- "HTTPS" --> SG --> CADDY --> API
+  API -- "POST /api/scan" --> PIPE
+  PIPE --> STORE
+  API -- "POST /api/coach" --> COACH
+  COACH -- "reads evidence" --> STORE
+  COACH --> CAP
+  EXTRACT --> CAP
+  CAP --> LLM
+  API -- "POST /api/extract" --> EXTRACT
+  EXTRACT -- "schema.org / text / page" --> SHOP
+  ENV -.-> API
+  STORE -- "GET /api/scans/&lt;id&gt;/house.json" --> BROWSER

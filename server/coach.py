@@ -34,7 +34,8 @@ Finish by calling exactly one action tool:
 - accept_scan when the plan is usable (list any caveats honestly),
 - request_rescan with ONE concrete, physical instruction (where to stand, what to point at),
 - ask_user when only the person can resolve it (e.g. "is the 0.4 m segment a wall or a wardrobe?").
-Speak plainly to a non-expert. Never invent measurements that are not in the evidence."""
+Speak plainly to a non-expert. Never invent measurements that are not in the evidence.
+Note: each wall's "sigma" is the pipeline's predicted 1-sigma uncertainty, not a measured error."""
 
 def _tool(name, desc, props, required):
     return {"name": name, "description": desc, "strict": True,

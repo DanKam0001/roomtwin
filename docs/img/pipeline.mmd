@@ -1,0 +1,21 @@
+flowchart TB
+  IN1["Point cloud / mesh<br/>cv2.loadPointCloud, cv2.loadMesh<br/>(+ numpy PLY fallback, 7 mm area sampling)"]
+  IN2["RGB-D frames + poses<br/>ARKit / ScanNet / TUM layouts"]
+  FUSE["TSDF fusion<br/>cv2.Volume(VolumeType_HashTSDF)<br/>integrate, raycast (+half-voxel fix)"]
+  ODO["Missing poses<br/>cv2.Odometry RGB_DEPTH<br/>frame-to-model, velocity gate"]
+  CLEAN["Clean<br/>1 cm voxel centroids, radius outliers<br/>numpy"]
+  NORM["Normals<br/>local PCA, planarity test"]
+  GRAV["Gravity + floor<br/>normal clusters, MSAC floor plane<br/>cv2.PCACompute2, cv2.Rodrigues"]
+  ROOMS["Room segmentation<br/>barrier / interior grids<br/>cv2.connectedComponentsWithStats, morphologyEx,<br/>findContours, distanceTransform, watershed,<br/>distanceTransformWithLabels; per-room re-level"]
+  WALLS["Walls<br/>one-point MSAC lines, cv2.fitLine(DIST_HUBER),<br/>merge, outline order, sigma per wall"]
+  OPEN["Openings + gaps<br/>per-wall 2 cm occupancy image<br/>morphologyEx, connectedComponentsWithStats,<br/>dilate, boxFilter, sub-cell edge refinement"]
+  OBS["Obstacles<br/>top-view raster, cv2.minAreaRect"]
+  QA["Coverage + QA codes<br/>cv2.fillPoly, erode<br/>GAP_BEHIND_DOOR, WALL_GAP, ..."]
+  ARUCO["Optional scale check<br/>cv2.aruco.ArucoDetector,<br/>cv2.solvePnP(IPPE_SQUARE)"]
+  OUT["Outputs<br/>room.json, house.json, floorplan.png,<br/>walls/&lt;id&gt;.png, room_mesh.glb, room_preview.ply"]
+
+  IN2 --> FUSE
+  IN2 --> ODO --> FUSE
+  FUSE --> CLEAN
+  IN1 --> CLEAN --> NORM --> GRAV --> ROOMS --> WALLS --> OPEN --> OBS --> QA --> OUT
+  ARUCO -.-> QA
