@@ -20,7 +20,7 @@ const sigmaTxt = (s) => (s != null ? ` ±${Math.max(1, Math.round(s * 100))} cm`
 
 const S = {
   src: null, world: null, items: [], selectedId: null, entryKey: null,
-  view: 'plan', snap: true, labels: true, ceiling: false, mesh: true,
+  view: 'plan', snap: true, labels: true, ceiling: false, mesh: false,
   status: {}, fits: {}, routes: {}, order: null, overlay: null, hidden: new Set(), locked: false,
   stamp: 0, orderIndex: null, nextId: 1,
   // uploaded scans: the open attempt, this session's attempts, a running coach call, the wall to pulse on the plan
@@ -213,7 +213,11 @@ function setScanParam(id) {
 async function openScan(attempt) {
   const src = await loadFromUrl(scanRoomUrl(attempt.id));
   attempt.coverage = src.raw.coverage?.score ?? attempt.coverage ?? null;
-  if (!attempt.qa?.length) attempt.qa = src.raw.qa || [];
+  if (!attempt.qa?.length) {
+    // a house.json carries QA per room; prefix each finding with its room name
+    attempt.qa = src.raw.qa || (src.raw.rooms || []).flatMap((r) =>
+      (r.room?.qa || []).map((q) => ({ ...q, message: `${r.name || r.id}: ${q.message}` })));
+  }
   if (!src.raw.name) src.raw = { ...src.raw, name: `Room scan ${attempt.n}` };
   src.scan = attempt;
   await loadSource(src);
