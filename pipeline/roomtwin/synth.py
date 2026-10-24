@@ -8,7 +8,7 @@ random gravity convention (y-up or z-up) with a random yaw and offset.
 
 The same scene can be ray-cast into RGB-D frames (ARKit-style JSON per frame) for the TSDF path.
 
-    python -m roomtwin.synth --out D:/roomtwin_data/synth          # all rooms, point clouds
+    python -m roomtwin.synth --out D:/roomtwin_data/synth          # all rooms + the two-room scene
     python -m roomtwin.synth --out ... --rgbd rect                  # plus RGB-D frames of one room
 """
 from __future__ import annotations
@@ -102,8 +102,11 @@ def _box_surfaces(bmin, bmax, label, color, yaw_axes=None):
     return s
 
 
-def build_scene(spec: RoomSpec):
-    """Surfaces of the room in its ground-truth frame (y up, floor y = 0, interior normals)."""
+def build_scene(spec: RoomSpec, outside: bool = True):
+    """Surfaces of the room in its ground-truth frame (y up, floor y = 0, interior normals).
+
+    outside: add the glimpse of a hallway through the open door (floor patch + far wall); off when
+    the neighbouring room is modelled for real (two-room scenes)."""
     C = np.asarray(spec.corners, np.float64)
     H = spec.height
     surfaces, walls = [], []
@@ -151,6 +154,7 @@ def build_scene(spec: RoomSpec):
         leaf_gap = (o["wall"], span[0], span[1], 0.0, o["height"])
         # hallway outside the door: floor patch and the opposite hallway wall (points beyond the wall plane)
         outN = -Nin
+    if spec.door_leaf is not None and outside:
         c0 = a2 + outN * 0.02
         Uo = np.array([Ud[0], 0, Ud[1]])
         Wo = np.array([outN[0], 0, outN[1]])
@@ -175,12 +179,7 @@ def sample_surface(s: Surface, density: float, rng):
     return p, uv
 
 
-def generate_cloud(spec: RoomSpec, seed: int = 0, spacing: float = 0.015, noise: float = 0.007,
-                   tangential: float = 0.002, outlier_frac: float = 0.002):
-    """Point cloud of a room in its ground-truth frame + per-point colours."""
-    rng = np.random.default_rng(seed)
-    surfaces, walls, leaf_gap = build_scene(spec)
-    density = 1.0 / spacing ** 2
+def _sample_room(spec: RoomSpec, surfaces, walls, leaf_gap, rng, density, noise, tangential):
     pts, cols = [], []
     for s in surfaces:
         p, uv = sample_surface(s, density, rng)
@@ -213,13 +212,83 @@ def generate_cloud(spec: RoomSpec, seed: int = 0, spacing: float = 0.015, noise:
             + rng.normal(0, tangential, (len(p), 1)) * s.V
         pts.append(p)
         cols.append(np.tile(s.color, (len(p), 1)) * rng.uniform(0.9, 1.1, (len(p), 1)))
-    P = np.concatenate(pts)
-    Cc = np.clip(np.concatenate(cols), 0, 1)
+    return pts, cols
+
+
+def _add_outliers(P, Cc, rng, outlier_frac):
     n_out = int(outlier_frac * len(P))
     lo, hi = P.min(0) - 0.3, P.max(0) + 0.3
     P = np.concatenate([P, lo + rng.random((n_out, 3)) * (hi - lo)])
     Cc = np.concatenate([Cc, rng.random((n_out, 3))])
     return P, Cc
+
+
+def generate_cloud(spec: RoomSpec, seed: int = 0, spacing: float = 0.015, noise: float = 0.007,
+                   tangential: float = 0.002, outlier_frac: float = 0.002):
+    """Point cloud of a room in its ground-truth frame + per-point colours."""
+    rng = np.random.default_rng(seed)
+    surfaces, walls, leaf_gap = build_scene(spec)
+    pts, cols = _sample_room(spec, surfaces, walls, leaf_gap, rng, 1.0 / spacing ** 2, noise, tangential)
+    return _add_outliers(np.concatenate(pts), np.clip(np.concatenate(cols), 0, 1), rng, outlier_frac)
+
+
+# ------------------------------------------------------------------------------- two-room scene
+# A bedroom and the corridor behind its door, in one shared frame. The corridor runs along the
+# bedroom's wall 0 (12 cm wall), the door in that wall opens into the bedroom, the corridor has its
+# own (lower) ceiling. Openings are given per room, in that room's wall coordinates.
+WALL_T = 0.12
+HOUSES = {
+    "bed_corridor": dict(
+        rooms=[
+            RoomSpec("bedroom", [(0, 0), (4.2, 0), (4.2, 3.4), (0, 3.4)], 2.50,
+                     [dict(wall=0, type="door", offset=2.9, width=0.82, sill=0.0, height=2.04),
+                      dict(wall=2, type="window", offset=1.2, width=1.40, sill=0.90, height=1.20)],
+                     [dict(min=(0.1, 0, 0.9), max=(1.6, 0.55, 2.9), label="bed"),          # against wall 3
+                      dict(min=(1.5, 0, 2.85), max=(2.7, 0.75, 3.35), label="desk")]),    # against wall 2
+            RoomSpec("corridor", [(-0.4, -1.12), (5.0, -1.12), (5.0, -WALL_T), (-0.4, -WALL_T)], 2.45,
+                     # wall 2 runs from x = 5.0 to -0.4 at z = -0.12: the bedroom door at x 2.9-3.72
+                     [dict(wall=2, type="door", offset=5.0 - 3.72, width=0.82, sill=0.0, height=2.04)],
+                     [], door_leaf=None, ceiling_keep=0.5),
+        ],
+        # doorway truth: (room index, opening index) pairs
+        doorways=[((0, 0), (1, 0))],
+    ),
+}
+
+
+def generate_house(house: dict, seed: int = 0, spacing: float = 0.015, noise: float = 0.007,
+                   tangential: float = 0.002, outlier_frac: float = 0.002):
+    """Point cloud of several rooms sharing one frame (no hallway glimpse: the neighbour is real)."""
+    rng = np.random.default_rng(seed)
+    pts, cols = [], []
+    for spec in house["rooms"]:
+        surfaces, walls, leaf_gap = build_scene(spec, outside=False)
+        p, c = _sample_room(spec, surfaces, walls, leaf_gap, rng, 1.0 / spacing ** 2, noise, tangential)
+        pts += p
+        cols += c
+    return _add_outliers(np.concatenate(pts), np.clip(np.concatenate(cols), 0, 1), rng, outlier_frac)
+
+
+def make_house(name: str, out_dir: str, seed: int, up: str, spacing: float = 0.015, noise: float = 0.007):
+    """Write <name>.ply + <name>_gt.json: {rooms: [ground_truth per room], doorways, gt_to_scan}."""
+    house = HOUSES[name]
+    rng = np.random.default_rng(seed + 1000)
+    P, C = generate_house(house, seed=seed, spacing=spacing, noise=noise)
+    T = random_pose(rng, up)
+    Pw = P @ T[:3, :3].T + T[:3, 3]
+    os.makedirs(out_dir, exist_ok=True)
+    ply = os.path.join(out_dir, f"{name}.ply")
+    write_ply(ply, Pw, C)
+    rooms = []
+    for spec in house["rooms"]:
+        g = ground_truth(spec)
+        g["gt_to_scan"] = T.tolist()
+        rooms.append(g)
+    gt = {"name": name, "rooms": rooms, "doorways": [list(map(list, d)) for d in house["doorways"]],
+          "gt_to_scan": T.tolist(), "up": up, "points": int(len(Pw)), "file": os.path.basename(ply)}
+    with open(os.path.join(out_dir, f"{name}_gt.json"), "w") as f:
+        json.dump(gt, f, indent=1)
+    return ply, gt
 
 
 def ground_truth(spec: RoomSpec):
@@ -435,6 +504,9 @@ def main(argv=None):
     if a.big:
         ply, gt = make_room(ROOMS["rect"], a.out, 11, "z", 0.0058, suffix="_big")
         print(f"{ply}: {gt['points']} points")
+    for name in HOUSES:
+        ply, gt = make_house(name, a.out, 7, "z", a.spacing)
+        print(f"{ply}: {gt['points']} points, {len(gt['rooms'])} rooms")
     for name in a.rgbd:
         d, _ = make_rgbd(ROOMS[name], os.path.join(a.out, f"{name}_rgbd"), seed=5)
         print(f"{d}: RGB-D frames")

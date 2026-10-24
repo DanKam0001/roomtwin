@@ -77,7 +77,7 @@ export function apiUrl(path) {
   return `${API_BASE}${path.startsWith('/') ? '' : '/'}${path}`;
 }
 
-export const scanRoomUrl = (id) => apiUrl(`/api/scans/${encodeURIComponent(id)}/room.json`);
+export const scanRoomUrl = (id) => apiUrl(`/api/scans/${encodeURIComponent(id)}/house.json`);
 
 function detailText(j, status) {
   const d = j && (j.detail ?? j.error);

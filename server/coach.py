@@ -111,6 +111,8 @@ def run(scan_dir: Path) -> dict:
                 content, note = _summary(room), "summary"
             elif name == "view_wall":
                 p = scan_dir / "walls" / f"{args['wall_id']}.png"
+                if not p.exists() and room.get("id"):
+                    p = scan_dir / "walls" / f"{room['id']}_{args['wall_id']}.png"
                 content = [_png_block(p)] if p.exists() else f"No image for wall {args['wall_id']}."
                 note = p.name if p.exists() else "missing"
             elif name == "view_floorplan":

@@ -12,18 +12,58 @@ python -m roomtwin.process scan.ply -o out/ --aruco photos/ --marker-size 0.15  
 python -m roomtwin.synth --out D:/roomtwin_data/synth --rgbd rect # synthetic rooms with ground truth
 python -m roomtwin.evaluate                                       # measured vs truth table
 python -m roomtwin.evaluate --sweep                               # 48-scan robustness sweep
-python -m pytest -q tests                                         # 29 tests, ~50 s
+python -m pytest -q tests                                         # 33 tests, ~45 s
 ```
 
-Outputs in `out/`: `room.json`, `room_preview.ply` (decimated coloured cloud in the room frame),
-`room_mesh.glb` (walls with openings cut out, floor, ceiling), `floorplan.png` (dimensioned top
-view), `walls/<id>.png` (each wall's occupancy grid with openings and gaps). Exit code 2 still
-writes a `room.json` with `error` and a `PIPELINE_FAILED` rescan action.
+Outputs in `out/`: `room.json` (the primary room), `house.json` (every room of the scan),
+`room_preview.ply` (decimated coloured cloud of the whole scan in the shared frame),
+`room_mesh.glb` (primary room: walls with openings cut out, floor, ceiling), `floorplan.png`
+(dimensioned top view; all rooms when there are several), `walls/<id>.png` (each wall's occupancy
+grid with openings and gaps). With several rooms, each other room adds `floorplan_<room>.png`,
+`room_mesh_<room>.glb` and `walls/<room>_<id>.png`, and the primary room's own plan is
+`floorplan_room1.png`. Exit code 2 still writes a `room.json` with `error` and a `PIPELINE_FAILED`
+rescan action.
 
 Frame: metres, y up, floor at y = 0, the longest-supported wall along +x, footprint starting at
 (0, 0); `floor.polygon` is counter-clockwise in (x, z); wall normals point into the room;
 `transform` is the 4x4 scan-to-room matrix. Openings: `offset` from the wall's `a` end, `sill` and
 `height` of the clear opening (`height` = top - sill).
+
+### Several rooms in one scan (`house.json`)
+
+A phone scan usually covers more than one room (the hallway behind the door). `roomtwin/rooms.py`
+separates them before any wall is fitted, then runs the single-room fit on each:
+
+1. **Grids** (2 cm, top view, gravity-levelled): barrier = vertical surfaces at 1.1-2.0 m (walls;
+   beds, desks and chairs are lower) plus vertical surfaces above 2.08 m (the lintel over a door);
+   interior = observed floor, ceiling, or anything below 1.1 m (furniture tops: the floor under a
+   bed is never seen), closed, minus the dilated barrier. Barrier specks shorter than 30 cm (lamps,
+   noise) are dropped.
+2. **Rooms** = connected components of the interior (a doorway is open under 2 m but its lintel
+   closes it; a corridor bend has no lintel and stays one room). Regions inside another region's
+   outline merge into it; grazing-view floor strips narrower than 50 cm are cut off. Fallback for a
+   doorway whose lintel was never scanned: `cv2.distanceTransform` + `cv2.watershed` from seeds
+   deeper than 0.6 m, split kept only where two room-sized basins (>= 2 m2) meet at a door-wide
+   (<= 1 m) constriction. A region is a room when it has >= 2 m2 of interior and >= 30 % of its rim
+   is wall; otherwise it is a view into an unscanned space and is reported (`house.segmentation`)
+   but not modelled. Narrow regions (95th-percentile half-width < 0.75 m) are hallways.
+3. **Points** go to the room of the nearest interior cell (`cv2.distanceTransformWithLabels`), so
+   the two faces of a shared wall go to the rooms they face.
+4. **Per-room levelling**: each room's own floor plane (MSAC + PCA) is levelled, pivoting on the
+   floor under its centroid so plan positions stay in the shared frame. Long scans drift: the
+   iPhone test scan's bedroom floor is tilted 1.0-1.2 deg against the hallway's, which is 5 cm over
+   the ceiling height. Each room also measures its own ceiling.
+5. **Fit** (walls, openings, obstacles, coverage, QA) per room in the frame of the **primary room**
+   (largest well-bounded floor area; corridors are down-weighted), which also defines `room.json`.
+6. **Doorways**: openings on parallel, opposite-facing walls of two rooms, < 45 cm apart (wall +
+   recess) and overlapping along the wall, are paired into `house.doorways`. A door seen from one
+   side only gets an inferred partner (`inferred: true`, `inferred_from`) on the other room's wall.
+   `house.entry` is the widest unpaired passable opening outside the primary room.
+
+`house.json` is the format `web/js/core/world.js` reads: `{type: "house", rooms: [{id, name,
+transform: {x, z, rot}, room: {...room.json...}}], doorways: [{a: {room, opening}, b: {room,
+opening}}], entry: {room, opening}}`. All rooms are already in the shared frame, so every
+`transform` is `{x: 0, z: 0, rot: 0}`. A single-room scan writes a one-room `house.json`.
 
 ## Inputs
 
@@ -52,6 +92,7 @@ Gravity is never assumed: y-up and z-up exports (and arbitrary orientations) are
 | normals | local PCA on two staggered 10 cm grids, planarity test | numpy |
 | gravity | normal clusters -> scored up candidates -> floor MSAC -> PCA normal | `cv2.PCACompute2`, `cv2.Rodrigues` |
 | planes | MSAC plane model (`SAC_MODEL_PLANE` parametrisation) with local optimisation | `cv2.PCACompute2` |
+| rooms | top-view barrier / interior grids, components, enclosed-region merge, watershed fallback at unlintelled doorways, nearest-room point labels, per-room re-levelling | `cv2.connectedComponents(WithStats)`, `cv2.morphologyEx`, `cv2.findContours`, `cv2.drawContours`, `cv2.distanceTransform`, `cv2.watershed`, `cv2.distanceTransformWithLabels` |
 | walls | one-point MSAC lines on oriented points, Huber refit, merge, outline ordering | `cv2.fitLine(DIST_HUBER)`, `cv2.findContours`, `cv2.morphologyEx`, `cv2.distanceTransform`, `cv2.line` |
 | obstacles | top-view raster, components, robust boxes, oriented footprint | `cv2.connectedComponentsWithStats`, `cv2.morphologyEx`, `cv2.minAreaRect` |
 | openings / gaps | per-wall 2 cm occupancy image, close/open, components, sub-cell edges | `cv2.morphologyEx`, `cv2.connectedComponentsWithStats`, `cv2.dilate`, `cv2.boxFilter` |
@@ -125,7 +166,21 @@ outside the room (the hallway seen through a door), parallel candidates in front
 are furniture, full-height gaps split a wall (alcove mouths) unless nothing is behind the gap
 (tall cupboards), the outline is closed across door/window gaps so an unscanned floor patch cannot
 leak, floor/ceiling heights use horizontal-surface points only, door gaps are separated from the
-wall hidden behind the open leaf, and RGB-D odometry results are gated by a constant-velocity model.
+wall hidden behind the open leaf (and that hidden stretch never becomes an opening, even with the
+next room visible behind it), and RGB-D odometry results are gated by a constant-velocity model.
+
+Added for real multi-room scans: rooms are segmented before fitting (above) and re-levelled on
+their own floor; a parallel candidate in front of a longer wall is furniture only if it faces the
+same way (a surface facing the other way is the back of a real step in the outline, e.g. the
+bedroom's notch); an observed wall shorter than 15 cm between its corners, or reversed, is clutter
+(a door-frame return) and is dropped, and so is the shorter of two parallel walls joined by an
+unobserved step under 20 cm when it is under 1.2 m long (a door leaf seen in its frame from the
+other room); the obstacle search ignores points within 6 cm of the ceiling (real ceilings are not
+flat to 3 cm); a doorway whose empty region runs into an unscanned part of the wall is found from
+per-column floor-up empty runs under a lintel with the next space visible behind it; a **closed
+door flush with the wall** is found from the door-shaped outline of its leaf/frame gaps 2.5-8 cm
+behind the wall plane (`flush: true`, `state: "closed"`); a window behind a blind is found from
+the set-back surface filling it, and measured on that surface.
 
 ## Evaluation (synthetic, exact ground truth)
 
@@ -146,6 +201,8 @@ yaw in y-up or z-up convention. Full measured-vs-truth table: `python -m roomtwi
 | RGB-D, 360 frames, no poses -> cv2.Odometry frame-to-model | walls within 3.4 cm (odometry drift), openings within 7 cm, ceiling -4.7 cm |
 | mesh input (coarse triangle mesh, z-up) | walls within 2 cm (test) |
 | ArUco scale check, 4 photos | true scale 1.000 -> 0.998; depth scaled by 1.020 -> 1.018, reported as "off by +1.8%" |
+| two-room scene (`synth.HOUSES["bed_corridor"]`: bedroom 4.2 x 3.4 m + 5.4 x 1.0 m corridor, 12 cm wall, door open into the bedroom, ceilings 2.50 / 2.45 m), 5 seeds, y-up/z-up | 2 rooms found every time, bedroom primary, corridor typed hallway; all walls within 0.11 cm, ceilings within 0.06 cm, the door found from both sides and paired (offset/width/height within 0.95 cm on both sides); worst opening 1.4 cm (a window width); `tests/test_house.py` |
+| real data: iPhone 14 Pro, 3d Scanner App PLY, bedroom + hallway (2.0 M points) | qualitative until the tape measurements arrive: bedroom 6 walls (4.809 / 4.176 m long walls, 2.958 m end wall, 1.993 + 0.603 + 0.997 m around the entry notch), ceiling 2.399 m, closed flush door 0.77 x 2.07 m, blind-covered window 1.69 m wide; L-shaped hallway (4.5 m2, ceiling 2.389 m, coverage 0.67) with the bedroom door paired (inferred on the hallway side) and a 0.93 x 2.21 m open doorway into an unscanned hallway arm (reported, not modelled: 21 % of its rim seen). Bedroom walls change by <= 0.8 cm over 6 RNG seeds. 19 s end to end |
 | real data: TUM RGB-D fr1/room (Kinect, mocap poses, 454 frames) | qualitative: 4 main walls, a window and a doorway found, ceiling 3.06 m; the right wall is never seen and is inferred; cluttered corner gives 3 short spurious segments; 97 s (fusion dominates) |
 
 Raw outputs: `D:/roomtwin_data/eval/` (synthetic table, sweep JSON) and `D:/roomtwin_data/out/<case>/`.
@@ -163,13 +220,24 @@ Raw outputs: `D:/roomtwin_data/eval/` (synthetic table, sweep JSON) and `D:/room
 * A tall cupboard in front of a wall is treated as furniture only if part of the real wall above or
   beside it is visible; heavy clutter in corners can create short spurious wall segments (seen on TUM).
 * The hinge-side jamb of an open door is hidden by the leaf; it is estimated from the leaf and
-  carries +2 cm sigma. Closed doors are found from the recess (2-8 cm behind the wall plane); a
-  door that is flush with the wall is invisible to geometry.
+  carries +2 cm sigma. Closed doors are found from the recess (2-8 cm behind the wall plane) or,
+  when the leaf is flush, from the outline of the gaps around it; a flush door with no visible
+  gaps (painted over, seen from far away) is invisible to geometry. A closed door's clear width is
+  taken as the outer extent of its jamb gaps (+2 cm sigma for that assumption).
 * Floor-to-ceiling openings are reported as `opening`, windows need a sill >= 0.3 m; curtains in
   front of a window make it a coverage gap rather than a window.
 * Obstacles are axis-aligned boxes in the room frame (plus an oriented `footprint`); things seen
   only from one side (a wardrobe from the front) are as deep as what was seen. Label is "unknown".
 * Without poses the RGB-D path drifts (frame-to-frame odometry has no loop closure); ARKit poses
   should always be exported. Gravity in that mode leans on the mean camera "up" hint.
-* One room per run; `house.json` (multi-room) is not produced yet.
+* Multi-room: rooms are measured separately and put in one frame without registering them to each
+  other, so scan drift between rooms stays in the plan (iPhone test scan: the hallway's walls are
+  ~1 deg off the bedroom's, the two faces of their shared wall are 8-14 cm apart instead of a constant
+  thickness). Room separation needs the lintel above a doorway or a door-wide constriction between
+  two room-sized spaces; an open-plan pair of rooms stays one room. A partly scanned space beyond a
+  doorway with less than 30 % of its rim seen as wall is reported in `house.segmentation` but not
+  modelled (on the test scan: the hallway arm past the corridor's open doorway).
+* Wall `sigma` assumes independent noise; real scans show doubled surfaces from drift between
+  passes (the bedroom's short end wall has 2-3 traces up to 4 cm apart), so `inlier_rms` is the
+  better warning sign and real errors can exceed `sigma`.
 * RGB-D fusion of 640x480 Kinect frames is slow (~0.2 s/frame); iPhone depth (256x192) is ~5x faster.

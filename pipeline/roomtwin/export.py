@@ -132,25 +132,18 @@ def write_glb(path, prims):
 
 
 # ------------------------------------------------------------------------------- floor plan
-def draw_floorplan(room, path, px_per_m=140, margin=110):
+def _draw_room(img, room, P, px_per_m, tag=""):
+    """Draw one room (fill, furniture, walls, gaps, openings, labels) with the mapping P(xz) -> px."""
     poly = np.asarray(room["floor"]["polygon"], float)
-    size = poly.max(0) * px_per_m + 2 * margin
-    W, Hh = int(size[0]), int(size[1]) + 40
-    img = np.full((Hh, W, 3), 255, np.uint8)
-
-    def P(xz):
-        xz = np.asarray(xz, float)
-        return (int(round(margin + xz[0] * px_per_m)), int(round(margin + 40 + xz[1] * px_per_m)))
-
     cv2.fillPoly(img, [np.array([P(p) for p in poly], np.int32)], (238, 240, 242), cv2.LINE_AA)
     for k, ob in enumerate(room["obstacles"]):
         p0, p1 = P([ob["min"][0], ob["min"][2]]), P([ob["max"][0], ob["max"][2]])
         cv2.rectangle(img, p0, p1, (200, 200, 205), -1)
         cv2.rectangle(img, p0, p1, (120, 120, 130), 1, cv2.LINE_AA)
         dims = f"{ob['id']} {ob['max'][0] - ob['min'][0]:.2f}x{ob['max'][2] - ob['min'][2]:.2f}x{ob['max'][1]:.2f}"
-        cv2.putText(img, dims, (p0[0] + 4, p0[1] + 16), cv2.FONT_HERSHEY_SIMPLEX, 0.38, (70, 70, 80), 1, cv2.LINE_AA)
+        cv2.putText(img, dims, (min(p0[0], p1[0]) + 4, min(p0[1], p1[1]) + 16), cv2.FONT_HERSHEY_SIMPLEX, 0.38,
+                    (70, 70, 80), 1, cv2.LINE_AA)
     walls = {w["id"]: w for w in room["walls"]}
-    centroid = poly.mean(0)
     for w in room["walls"]:
         col = (40, 40, 40) if not w.get("inferred") else (0, 140, 255)
         cv2.line(img, P(w["a"]), P(w["b"]), col, 5, cv2.LINE_AA)
@@ -170,39 +163,98 @@ def draw_floorplan(room, path, px_per_m=140, margin=110):
         p0, p1 = a + u * o["offset"], a + u * (o["offset"] + o["width"])
         cv2.line(img, P(p0), P(p1), (255, 255, 255), 7)
         if o["type"] == "door":
-            r = int(o["width"] * px_per_m)
-            ang = np.degrees(np.arctan2(n[1], n[0]))
-            ang_u = np.degrees(np.arctan2(u[1], u[0]))
-            # quarter swing from the wall direction into the room
-            a0, a1 = sorted([ang_u, ang])
-            if a1 - a0 > 180:
-                a0, a1 = a1, a0 + 360
-            cv2.ellipse(img, P(p0), (r, r), 0, a0, a1, (150, 110, 60), 1, cv2.LINE_AA)
-            cv2.line(img, P(p0), P(p0 + n * o["width"]), (150, 110, 60), 2, cv2.LINE_AA)
+            if o.get("state") == "closed" or o.get("inferred"):
+                cv2.line(img, P(p0), P(p1), (150, 110, 60), 2, cv2.LINE_AA)       # closed leaf in the frame
+            else:
+                r = int(o["width"] * px_per_m)
+                ang = np.degrees(np.arctan2(n[1], n[0]))
+                ang_u = np.degrees(np.arctan2(u[1], u[0]))
+                # quarter swing from the wall direction into the room
+                a0, a1 = sorted([ang_u, ang])
+                if a1 - a0 > 180:
+                    a0, a1 = a1, a0 + 360
+                cv2.ellipse(img, P(p0), (r, r), 0, a0, a1, (150, 110, 60), 1, cv2.LINE_AA)
+                cv2.line(img, P(p0), P(p0 + n * o["width"]), (150, 110, 60), 2, cv2.LINE_AA)
         else:
             cv2.line(img, P(p0), P(p1), (200, 120, 0), 2, cv2.LINE_AA)
             cv2.line(img, P(p0 + n * 0.04), P(p1 + n * 0.04), (200, 120, 0), 1, cv2.LINE_AA)
-        mid = 0.5 * (p0 + p1) - n * 0.22
-        cv2.putText(img, f"{o['id']} {o['width']:.2f}", P(mid), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (200, 120, 0), 1, cv2.LINE_AA)
+        mid = 0.5 * (p0 + p1) + n * 0.22
+        label = f"{o['id']} {o['width']:.2f}" + (" (inferred)" if o.get("inferred") else "")
+        cv2.putText(img, label, P(mid), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (200, 120, 0), 1, cv2.LINE_AA)
     for w in room["walls"]:
         a, b = np.asarray(w["a"]), np.asarray(w["b"])
         n = np.asarray(w["normal"])
         mid = 0.5 * (a + b) + n * 0.28
-        txt = f"{w['id']} {w['length']:.3f}+/-{w['sigma'] * 100:.1f}cm"
+        txt = f"{tag}{w['id']} {w['length']:.3f}+/-{w['sigma'] * 100:.1f}cm"
         (tw, th), _ = cv2.getTextSize(txt, cv2.FONT_HERSHEY_SIMPLEX, 0.45, 1)
         pm = P(mid)
         cv2.putText(img, txt, (pm[0] - tw // 2, pm[1] + th // 2), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (20, 20, 20), 1, cv2.LINE_AA)
         cv2.circle(img, P(a), 4, (0, 0, 0), -1, cv2.LINE_AA)
-    title = (f"RoomTwin  area {room['floor']['area_m2']:.2f} m2  ceiling {room['ceiling_height']['value']:.3f} m"
-             f"  coverage {room['coverage']['score'] * 100:.0f}%")
-    cv2.putText(img, title, (12, 26), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 1, cv2.LINE_AA)
-    x0, y0 = 12, Hh - 18
+
+
+def _canvas(polys, px_per_m, margin):
+    allp = np.concatenate([np.asarray(p, float) for p in polys])
+    lo, hi = allp.min(0), allp.max(0)
+    size = (hi - lo) * px_per_m + 2 * margin
+    W, Hh = int(size[0]), int(size[1]) + 40
+    img = np.full((Hh, W, 3), 255, np.uint8)
+
+    def P(xz):
+        xz = np.asarray(xz, float)
+        return (int(round(margin + (xz[0] - lo[0]) * px_per_m)), int(round(margin + 40 + (xz[1] - lo[1]) * px_per_m)))
+
+    return img, P
+
+
+def _scale_bar(img, px_per_m):
+    x0, y0 = 12, img.shape[0] - 18
     cv2.line(img, (x0, y0), (x0 + px_per_m, y0), (0, 0, 0), 2)
     cv2.putText(img, "1 m", (x0 + px_per_m + 6, y0 + 5), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 0, 0), 1, cv2.LINE_AA)
+
+
+def draw_floorplan(room, path, px_per_m=140, margin=110):
+    img, P = _canvas([room["floor"]["polygon"]], px_per_m, margin)
+    _draw_room(img, room, P, px_per_m)
+    name = f"{room['name']}  " if room.get("name") else ""
+    title = (f"RoomTwin  {name}area {room['floor']['area_m2']:.2f} m2  ceiling {room['ceiling_height']['value']:.3f} m"
+             f"  coverage {room['coverage']['score'] * 100:.0f}%")
+    cv2.putText(img, title, (12, 26), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 1, cv2.LINE_AA)
+    _scale_bar(img, px_per_m)
     cv2.imwrite(path, img)
 
 
-def draw_wall_elevations(room, wall_results, out_dir, px=3):
+def draw_house_floorplan(house, path, px_per_m=120, margin=120):
+    """All rooms of house.json in their shared frame, doorways linked, one label per room."""
+    rooms = [(r["id"], r["name"], r["room"]) for r in house["rooms"]]
+    img, P = _canvas([rm["floor"]["polygon"] for _, _, rm in rooms], px_per_m, margin)
+    for rid, name, rm in rooms:
+        _draw_room(img, rm, P, px_per_m)
+    for rid, name, rm in rooms:
+        c = np.asarray(rm["floor"]["polygon"], float).mean(0)
+        txt = f"{name}: {rm['floor']['area_m2']:.2f} m2, ceiling {rm['ceiling_height']['value']:.2f} m"
+        (tw, th), _ = cv2.getTextSize(txt, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 2)
+        pc = P(c)
+        cv2.putText(img, txt, (pc[0] - tw // 2, pc[1]), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 4, cv2.LINE_AA)
+        cv2.putText(img, txt, (pc[0] - tw // 2, pc[1]), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (120, 40, 0), 1, cv2.LINE_AA)
+    by_id = {rid: rm for rid, _, rm in rooms}
+    for d in house.get("doorways", []):
+        ends = []
+        for side in ("a", "b"):
+            rm = by_id[d[side]["room"]]
+            o = next(o for o in rm["openings"] if o["id"] == d[side]["opening"])
+            w = next(w for w in rm["walls"] if w["id"] == o["wall"])
+            a, b = np.asarray(w["a"]), np.asarray(w["b"])
+            u = (b - a) / w["length"]
+            ends.append(a + u * (o["offset"] + 0.5 * o["width"]))
+        cv2.line(img, P(ends[0]), P(ends[1]), (0, 160, 0), 3, cv2.LINE_AA)
+        cv2.circle(img, P(0.5 * (ends[0] + ends[1])), 6, (0, 160, 0), -1, cv2.LINE_AA)
+    title = f"RoomTwin  {len(rooms)} rooms, {len(house.get('doorways', []))} doorways (green)"
+    cv2.putText(img, title, (12, 26), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 1, cv2.LINE_AA)
+    _scale_bar(img, px_per_m)
+    cv2.imwrite(path, img)
+
+
+def draw_wall_elevations(room, wall_results, out_dir, px=3, prefix=""):
     """walls/<id>.png: the occupancy grid each wall was analysed on (floor at the bottom), with
     detected openings (green) and coverage gaps (red = no points, orange = occluded/low density)."""
     from .openings import CELL
@@ -233,22 +285,45 @@ def draw_wall_elevations(room, wall_results, out_dir, px=3):
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 120, 0), 1, cv2.LINE_AA)
         cv2.putText(vis, f"{w['id']}  {w['length']:.3f} m  coverage {w['coverage'] * 100:.0f}%", (6, 18),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1, cv2.LINE_AA)
-        path = os.path.join("walls", f"{w['id']}.png")
+        path = os.path.join("walls", f"{prefix}{w['id']}.png")
         cv2.imwrite(os.path.join(out_dir, path), vis)
         files[w["id"]] = path.replace(os.sep, "/")
     return files
 
 
-def write_outputs(out_dir, room, extra, mesh=True, max_preview=250000, seed=0):
+def write_outputs(out_dir, room, extra, mesh=True, max_preview=250000, seed=0, floorplan="floorplan.png",
+                  prefix="", mesh_name="room_mesh.glb", preview=True):
     P, C, lab = extra["P"], extra["C"], extra["labels"]
-    rng = np.random.default_rng(seed)
-    sel = np.arange(len(P)) if len(P) <= max_preview else rng.choice(len(P), max_preview, replace=False)
-    col = C[sel] if C is not None else LABEL_RGB[lab[sel]]
-    write_ply(os.path.join(out_dir, "room_preview.ply"), P[sel], col)
-    room["preview"] = "room_preview.ply"
-    draw_floorplan(room, os.path.join(out_dir, "floorplan.png"))
-    room["floorplan"] = "floorplan.png"
-    room["wall_elevations"] = draw_wall_elevations(room, extra["wall_results"], out_dir)
+    if preview:
+        rng = np.random.default_rng(seed)
+        sel = np.arange(len(P)) if len(P) <= max_preview else rng.choice(len(P), max_preview, replace=False)
+        col = C[sel] if C is not None else LABEL_RGB[lab[sel]]
+        write_ply(os.path.join(out_dir, "room_preview.ply"), P[sel], col)
+        room["preview"] = "room_preview.ply"
+    draw_floorplan(room, os.path.join(out_dir, floorplan))
+    room["floorplan"] = floorplan
+    room["wall_elevations"] = draw_wall_elevations(room, extra["wall_results"], out_dir, prefix=prefix)
     if mesh:
-        write_glb(os.path.join(out_dir, "room_mesh.glb"), room_mesh(room))
-        room["mesh"] = "room_mesh.glb"
+        write_glb(os.path.join(out_dir, mesh_name), room_mesh(room))
+        room["mesh"] = mesh_name
+
+
+def write_house_outputs(out_dir, house, results, primary_id, mesh=True):
+    """Per-room outputs (floorplan_<id>.png, walls/<id>_<wall>.png, room_mesh_<id>.glb), the primary
+    room under the classic names (room_mesh.glb, walls/<wall>.png, room_preview.ply = whole scan in
+    the shared frame), and the combined floorplan.png. Everything sits at the top level of out_dir
+    (plus walls/), so the server can serve each file by name."""
+    single = len(house["rooms"]) == 1
+    for r in house["rooms"]:
+        rid = r["id"]
+        room, extra = results[rid]
+        primary = rid == primary_id
+        write_outputs(out_dir, room, extra, mesh=mesh, preview=primary,
+                      floorplan="floorplan.png" if single else f"floorplan_{rid}.png",
+                      prefix="" if primary else f"{rid}_",
+                      mesh_name="room_mesh.glb" if primary else f"room_mesh_{rid}.glb")
+        r["room"] = room
+    if not single:
+        draw_house_floorplan(house, os.path.join(out_dir, "floorplan.png"))
+    house["floorplan"] = "floorplan.png"
+    house["preview"] = "room_preview.ply"

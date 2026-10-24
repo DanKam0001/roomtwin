@@ -13,9 +13,11 @@ from .geometry import points_in_polygon
 from .openings import wall_coords, wall_frame
 
 
-def structure_mask(P, walls, H, band, floor_tol=0.03):
-    """Points explained by the floor, the ceiling or a wall band."""
-    m = (P[:, 1] < floor_tol) | (P[:, 1] > H - floor_tol)
+def structure_mask(P, walls, H, band, floor_tol=0.03, ceil_tol=0.06):
+    """Points explained by the floor, the ceiling or a wall band. The ceiling band is wider: real
+    ceilings are not perfectly flat or level (3 cm over a 5 m room in the iPhone test scan) and
+    furniture does not come within 6 cm of them."""
+    m = (P[:, 1] < floor_tol) | (P[:, 1] > H - ceil_tol)
     for w in walls:
         a, u, n, L = wall_frame(w["a"], w["b"])
         t, _, d = wall_coords(P, a, u, n)

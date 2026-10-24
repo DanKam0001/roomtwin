@@ -224,8 +224,11 @@ def prune_outside(walls, P, floor_mask):
             if inside > 0.8 and np.mean(dist < -0.10) > 0.8:
                 bad.add(j)                                  # behind wall i: outside the room
             elif (np.mean((dist > 0.05) & (dist < 1.2)) > 0.8 and abs(wi["line"].d @ wj["line"].d) > np.cos(np.radians(10))
-                  and (info[j][1] - info[j][0]) < 0.9 * (hi - lo)):
-                bad.add(j)                                  # in front of a longer wall: furniture
+                  and (info[j][1] - info[j][0]) < 0.9 * (hi - lo)
+                  and (wi["line"].n * side) @ (wj["line"].n * info[j][2]) > 0):
+                # in front of a longer wall and facing the same way: a furniture front. A surface facing
+                # the other way (towards wall i) is the back of a step in the outline, i.e. a real wall.
+                bad.add(j)
     kept = [w for k, w in enumerate(walls) if k not in bad]
     return kept, [w for k, w in enumerate(walls) if k in bad], info
 
@@ -313,7 +316,7 @@ def sigma_perp(st, t):
     return st["rms"] / np.sqrt(st["n_eff"]) * np.sqrt(1.0 + (t - st["t_mean"]) ** 2 / max(st["var_t"], 1e-6))
 
 
-def build_footprint(walls, P, H, floor_mask, k_scale=0.003, P_meas=None):
+def build_footprint(walls, P, H, floor_mask, k_scale=0.003, P_meas=None, min_short_wall=0.15):
     """Order boundary walls along the room outline, intersect neighbours, compute lengths + sigma.
 
     Returns (wall dicts, polygon Kx2 CCW, rejected wall candidates)."""
@@ -351,20 +354,7 @@ def build_footprint(walls, P, H, floor_mask, k_scale=0.003, P_meas=None):
                 rejected.append(ordered.pop(weak))
                 continue
         i += 1
-    # adjacent collinear pieces (one wall split by a large opening) -> merge
-    i = 0
-    while len(ordered) > 2 and i < len(ordered):
-        j = (i + 1) % len(ordered)
-        li, lj = ordered[i]["line"], ordered[j]["line"]
-        if abs(li.d @ lj.d) > np.cos(np.radians(6)) and abs(np.median(li.dist(P[ordered[j]["idx"]][:, [0, 2]]))) < 0.08:
-            idx = np.union1d(ordered[i]["idx"], ordered[j]["idx"])
-            ln = Line(*fit_line_2d(P[idx][:, [0, 2]]))
-            q = P[idx][:, [0, 2]]
-            t = ln.t(q)
-            ordered[i] = dict(ordered[i], line=ln, idx=idx, seg=(ln.at(np.percentile(t, 1)), ln.at(np.percentile(t, 99))))
-            ordered.pop(j)
-            continue
-        i += 1
+    _merge_collinear_neighbours(ordered, P)
     n = len(ordered)
     if n < 3:
         raise RuntimeError(f"only {n} boundary walls found")
@@ -382,22 +372,24 @@ def build_footprint(walls, P, H, floor_mask, k_scale=0.003, P_meas=None):
         w["stats"] = line_stats(w["line"], q[:, [0, 2]], q[:, 1])
         if P_meas is not None:
             refine_on_measurement_cloud(w, P_meas, H)
-    corners, inferred = [], []
-    for i in range(n):
-        wi, wj = ordered[i], ordered[(i + 1) % n]
-        sin_phi = abs(cross2(wi["line"].d, wj["line"].d))
-        c = _intersect(wi["line"], wj["line"]) if sin_phi > np.sin(np.radians(20)) else None
-        end_i, start_j = wi["seg"][1], wj["seg"][0]
-        if c is not None and min(np.linalg.norm(c - end_i), np.linalg.norm(c - start_j)) > 1.5:
-            c = None                       # implausible far intersection: a wall is missing here
-        if c is None:
-            # parallel step (missing short wall): connect end of i to the foot point on line j
-            p1 = end_i
-            p2 = wj["line"].at(wj["line"].t(p1))
-            corners.append((p1, p2))
-            inferred.append(i)
-        else:
-            corners.append((c, c))
+    # corners; an observed wall that ends up shorter than 15 cm (or reversed) between its corners is
+    # clutter (door-frame return, cupboard side): drop it, re-merge collinear neighbours, repeat
+    while True:
+        corners, inferred = _corners(ordered)
+        k = _short_wall(ordered, corners, min_short_wall) if len(ordered) > 3 else None
+        if k is None and len(ordered) > 3:
+            k = _shallow_step(ordered, corners, inferred)
+        if k is None:
+            break
+        rejected.append(ordered.pop(k))
+        _merge_collinear_neighbours(ordered, P)
+        for w in ordered:
+            if "meas_idx" not in w:
+                q = P[w["idx"]]
+                w["stats"] = line_stats(w["line"], q[:, [0, 2]], q[:, 1])
+                if P_meas is not None:
+                    refine_on_measurement_cloud(w, P_meas, H)
+    n = len(ordered)
     # walls between corners (plus inferred connector walls)
     out = []
     for i in range(n):
@@ -414,6 +406,83 @@ def build_footprint(walls, P, H, floor_mask, k_scale=0.003, P_meas=None):
         poly = np.array([o["a"] for o in out])
     _wall_sigmas(out, k_scale)
     return out, poly, rejected
+
+
+def _merge_collinear_neighbours(ordered, P):
+    """Adjacent collinear pieces along the outline (one wall split by a large opening) -> one wall."""
+    i = 0
+    while len(ordered) > 2 and i < len(ordered):
+        j = (i + 1) % len(ordered)
+        li, lj = ordered[i]["line"], ordered[j]["line"]
+        if abs(li.d @ lj.d) > np.cos(np.radians(6)) and abs(np.median(li.dist(P[ordered[j]["idx"]][:, [0, 2]]))) < 0.08:
+            idx = np.union1d(ordered[i]["idx"], ordered[j]["idx"])
+            ln = Line(*fit_line_2d(P[idx][:, [0, 2]]))
+            if ln.d @ li.d < 0:
+                ln = Line(ln.p, -ln.d)
+            q = P[idx][:, [0, 2]]
+            t = ln.t(q)
+            seg = (ln.at(np.percentile(t, 1)), ln.at(np.percentile(t, 99)))
+            ordered[i] = dict(ordered[i], line=ln, idx=idx, seg=seg)
+            ordered[i].pop("meas_idx", None)
+            ordered.pop(j)
+            if j < i:
+                i -= 1
+            continue
+        i += 1
+
+
+def _corners(ordered):
+    n = len(ordered)
+    corners, inferred = [], []
+    for i in range(n):
+        wi, wj = ordered[i], ordered[(i + 1) % n]
+        sin_phi = abs(cross2(wi["line"].d, wj["line"].d))
+        c = _intersect(wi["line"], wj["line"]) if sin_phi > np.sin(np.radians(20)) else None
+        end_i, start_j = wi["seg"][1], wj["seg"][0]
+        if c is not None and min(np.linalg.norm(c - end_i), np.linalg.norm(c - start_j)) > 1.5:
+            c = None                       # implausible far intersection: a wall is missing here
+        if c is None:
+            # parallel step (missing short wall): connect end of i to the foot point on line j
+            p1 = end_i
+            p2 = wj["line"].at(wj["line"].t(p1))
+            corners.append((p1, p2))
+            inferred.append(i)
+        else:
+            corners.append((c, c))
+    return corners, inferred
+
+
+def _short_wall(ordered, corners, min_len):
+    """Index of the weakest observed wall that came out shorter than min_len or reversed between its
+    corners (clutter: a door-frame return, a cupboard side), or None."""
+    n = len(ordered)
+    bad = []
+    for i in range(n):
+        a, b = corners[i - 1][1], corners[i][0]
+        v = b - a
+        L = float(np.linalg.norm(v))
+        if L < min_len or v @ ordered[i]["line"].d < 0:
+            bad.append(i)
+    if not bad:
+        return None
+    return min(bad, key=lambda i: len(ordered[i]["idx"]))
+
+
+def _shallow_step(ordered, corners, inferred, max_depth=0.2, max_len=1.2):
+    """Two parallel walls joined by an unobserved step shallower than 20 cm: the shorter one (if
+    under 1.2 m) is a recess or a protrusion of clutter (a door leaf in its frame seen from the
+    other side, a radiator, a cupboard side), not a wall of the room. Returns its index or None."""
+    n = len(ordered)
+    for i in inferred:
+        p1, p2 = corners[i]
+        if np.linalg.norm(p2 - p1) >= max_depth:
+            continue
+        j = (i + 1) % n
+        lens = [float(np.linalg.norm(ordered[k]["seg"][1] - ordered[k]["seg"][0])) for k in (i, j)]
+        k = (i, j)[int(np.argmin(lens))]
+        if min(lens) < max_len:
+            return k
+    return None
 
 
 def _wall_sigmas(out, k_scale):

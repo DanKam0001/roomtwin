@@ -149,7 +149,7 @@ async def api_scan(file: UploadFile = File(...)):
     room = json.loads((d / "room.json").read_text(encoding="utf-8"))
     log_event(d, {"type": "processed", **stats, "walls": len(room.get("walls", [])),
                   "coverage": room.get("coverage", {}).get("score")})
-    return {"id": sid, "room_url": f"/api/scans/{sid}/room.json", "processing_s": stats["seconds"],
+    return {"id": sid, "room_url": f"/api/scans/{sid}/house.json", "processing_s": stats["seconds"],
             "qa": room.get("qa", []), "files": sorted(p.name for p in d.iterdir() if p.is_file())}
 
 
