@@ -1,0 +1,9 @@
+﻿{
+  "name": "roomtwin-web",
+  "private": true,
+  "type": "module",
+  "description": "RoomTwin static web app (no build step). Tests use node's built-in runner.",
+  "scripts": {
+    "test": "node --test tests/*.test.js"
+  }
+}

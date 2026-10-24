@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>RoomTwin</title>
+  <meta name="description" content="Your scanned room as a measured digital twin: plan, walk through, place furniture and check it fits through the door.">
+  <meta name="theme-color" content="#0e1013">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230e1013'/%3E%3Cpath d='M7 24V11l9-5 9 5v13h-7v-7h-4v7z' fill='none' stroke='%2363d2be' stroke-width='2.2' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/app.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body class="no-room">
+  <header class="topbar">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M7 24V11l9-5 9 5v13h-7v-7h-4v7z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/></svg>
+      <span>RoomTwin</span>
+    </div>
+    <div class="roomtitle" id="roomTitle"></div>
+    <nav class="seg" id="viewTabs" aria-label="View">
+      <button data-view="plan" class="on">Plan</button>
+      <button data-view="orbit">3D</button>
+      <button data-view="walk">Walk</button>
+    </nav>
+    <div class="actions">
+      <button class="btn ghost" id="btnOpen" title="Open room.json, house.json or a saved layout">
+        <svg viewBox="0 0 24 24"><path d="M4 7h6l2 2h8v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/></svg><span>Open</span>
+      </button>
+      <select id="sampleSel" class="btn ghost" title="Sample rooms">
+        <option value="">Samples</option>
+        <option value="samples/bedroom.json">Bedroom</option>
+        <option value="samples/living_l.json">L-shaped living room</option>
+        <option value="samples/house.json">House with hallway</option>
+        <option value="samples/house_furnished.json">House, furnished</option>
+      </select>
+      <button class="btn ghost" id="btnExport" title="Save the furnished layout as JSON">
+        <svg viewBox="0 0 24 24"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 19h14"/></svg><span>Save</span>
+      </button>
+      <button class="btn ghost" id="btnShot" title="Save a screenshot">
+        <svg viewBox="0 0 24 24"><path d="M4 8h3l2-2h6l2 2h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg><span>Shot</span>
+      </button>
+    </div>
+    <input type="file" id="fileInput" accept=".json,.glb,.gltf,application/json" multiple hidden>
+  </header>
+
+  <main>
+    <section id="viewport" aria-label="Room view">
+      <canvas id="plan"></canvas>
+      <div id="three" hidden></div>
+      <div id="loading3d" class="hint-pill" hidden>Loading 3D...</div>
+
+      <div class="vtools" id="vtools">
+        <label class="tog"><input type="checkbox" id="optSnap" checked><span>Snap to walls</span></label>
+        <label class="tog"><input type="checkbox" id="optLabels" checked><span>Measurements</span></label>
+        <label class="tog only3d"><input type="checkbox" id="optCeiling"><span>Ceiling</span></label>
+        <label class="tog only3d" id="optMeshWrap" hidden><input type="checkbox" id="optMesh" checked><span>Scan mesh</span></label>
+      </div>
+
+      <div class="itemtools" id="itemTools" hidden>
+        <button class="btn icon" data-act="rotl" title="Rotate -15°"><svg viewBox="0 0 24 24"><path d="M5 12a7 7 0 1 0 2-5M5 4v4h4"/></svg></button>
+        <button class="btn icon" data-act="rot90" title="Rotate 90° (R)"><span>90°</span></button>
+        <button class="btn icon" data-act="rotr" title="Rotate +15° (Shift+R)"><svg viewBox="0 0 24 24"><path d="M19 12a7 7 0 1 1-2-5M19 4v4h-4"/></svg></button>
+        <button class="btn icon danger" data-act="del" title="Remove (Delete)"><svg viewBox="0 0 24 24"><path d="M6 7h12M10 7V5h4v2m-7 0 1 12h8l1-12"/></svg></button>
+      </div>
+
+      <div id="walkHint" class="hint-pill" hidden></div>
+      <div id="joystick" hidden><div class="knob"></div></div>
+      <div id="crosshair" hidden></div>
+
+      <div id="playbar" class="playbar" hidden>
+        <span id="playText"></span>
+        <button class="btn small" id="btnStopPlay">Stop</button>
+      </div>
+
+      <div id="empty" class="empty">
+        <div class="empty-card">
+          <h1>Your room, measured.</h1>
+          <p>Load the <code>room.json</code> from a scan to see it in plan, 3D and walk mode, place furniture, and check it gets through the door.</p>
+          <div class="drop" id="dropZone">
+            <svg viewBox="0 0 24 24"><path d="M12 16V5m0 0-4 4m4-4 4 4M5 19h14"/></svg>
+            <span>Drop <b>room.json</b> or <b>house.json</b> here</span>
+            <button class="btn" id="btnOpen2">Choose file</button>
+          </div>
+          <div class="samples">
+            <span class="muted">Or try a sample</span>
+            <button class="sample" data-src="samples/bedroom.json"><b>Bedroom</b><small>3.6 x 3.2 m, narrow door</small></button>
+            <button class="sample" data-src="samples/living_l.json"><b>Living room</b><small>L-shaped, garden slider</small></button>
+            <button class="sample" data-src="samples/house.json"><b>House</b><small>2 rooms + L hallway</small></button>
+          </div>
+        </div>
+      </div>
+      <div id="dropHint" class="drophint" hidden><div>Drop to load</div></div>
+      <div id="toasts" aria-live="polite"></div>
+    </section>
+
+    <aside id="panel" aria-label="Details">
+      <button class="sheet-handle" id="sheetHandle" aria-label="Expand panel"><span></span></button>
+
+      <section class="card" id="roomCard">
+        <div class="card-h"><h2>Room</h2><span class="muted small" id="roomSource"></span></div>
+        <div class="stats" id="roomStats"></div>
+        <div id="qaList" class="qa"></div>
+        <details class="measure">
+          <summary>All measurements</summary>
+          <table id="wallTable"></table>
+        </details>
+      </section>
+
+      <section class="card" id="furnCard">
+        <div class="card-h"><h2>Furniture</h2><span class="muted small" id="itemCount"></span></div>
+        <form id="urlForm" class="urlrow" autocomplete="off">
+          <input type="url" id="urlInput" placeholder="Paste a product link" inputmode="url" aria-label="Product link">
+          <button class="btn accent" type="submit" id="btnFetch">Add</button>
+        </form>
+        <div class="subtle">or <button class="link" id="btnManual" type="button">type the dimensions</button>, or pick a common item:</div>
+        <div class="chips" id="catalogue"></div>
+        <ul id="itemList" class="items"></ul>
+      </section>
+
+      <section class="card" id="moveCard">
+        <div class="card-h"><h2>Move-in plan</h2></div>
+        <label class="field row"><span>Entry door</span><select id="entrySel"></select></label>
+        <div class="row gap">
+          <button class="btn accent" id="btnOrder" type="button">Plan build order</button>
+          <button class="btn" id="btnPlayOrder" type="button" disabled>
+            <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg><span>Play</span>
+          </button>
+        </div>
+        <div id="orderStatus" class="subtle"></div>
+        <ol id="orderList" class="order"></ol>
+      </section>
+      <footer class="foot muted small">Dimensions in metres. ± values are the scan's 1-sigma uncertainty.</footer>
+    </aside>
+  </main>
+
+  <dialog id="itemDialog">
+    <form method="dialog" id="itemFormEl" class="dlg">
+      <h3 id="dlgTitle">Add an item</h3>
+      <p class="subtle" id="dlgNote"></p>
+      <label class="field"><span>Name</span><input id="fName" required placeholder="e.g. Corner sofa"></label>
+      <div class="dims">
+        <label class="field"><span>Width (cm)</span><input id="fW" type="number" min="5" max="600" step="0.5" required inputmode="decimal"></label>
+        <label class="field"><span>Depth (cm)</span><input id="fD" type="number" min="5" max="600" step="0.5" required inputmode="decimal"></label>
+        <label class="field"><span>Height (cm)</span><input id="fH" type="number" min="5" max="400" step="0.5" required inputmode="decimal"></label>
+      </div>
+      <label class="field"><span>Diagonal depth (cm, sofas, optional)</span><input id="fDiag" type="number" min="5" max="300" step="0.5" inputmode="decimal" placeholder="from the spec sheet"></label>
+      <label class="tog"><input type="checkbox" id="fFlat"><span>Flat-pack (arrives in boxes)</span></label>
+      <div id="pkgBox" hidden>
+        <div class="subtle">Package sizes (cm)</div>
+        <div id="pkgRows"></div>
+        <button type="button" class="link" id="btnAddPkg">+ add a package</button>
+        <label class="field"><span>Space needed to build it (cm around)</span><input id="fAsm" type="number" min="0" max="200" step="5" value="60" inputmode="decimal"></label>
+      </div>
+      <label class="field"><span>Image URL (optional)</span><input id="fImg" type="url" placeholder="https://..."></label>
+      <input type="hidden" id="fUrl">
+      <div class="row end gap">
+        <button class="btn ghost" value="cancel" formnovalidate>Cancel</button>
+        <button class="btn accent" value="ok" id="dlgOk">Add item</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

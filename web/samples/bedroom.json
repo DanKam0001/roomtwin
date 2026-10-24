@@ -1,0 +1,174 @@
+{
+ "version": 1,
+ "name": "Bedroom",
+ "source": {
+  "type": "rgbd",
+  "file": "bedroom_scan/",
+  "points": 412380
+ },
+ "floor": {
+  "polygon": [
+   [
+    0,
+    0
+   ],
+   [
+    3.6,
+    0
+   ],
+   [
+    3.6,
+    3.2
+   ],
+   [
+    0,
+    3.2
+   ]
+  ],
+  "area_m2": 11.52
+ },
+ "ceiling_height": {
+  "value": 2.42,
+  "sigma": 0.008
+ },
+ "walls": [
+  {
+   "id": "w0",
+   "a": [
+    0,
+    0
+   ],
+   "b": [
+    3.6,
+    0
+   ],
+   "length": 3.6,
+   "sigma": 0.011,
+   "height": 2.42,
+   "normal": [
+    -0.0,
+    1.0
+   ],
+   "inlier_rms": 0.004
+  },
+  {
+   "id": "w1",
+   "a": [
+    3.6,
+    0
+   ],
+   "b": [
+    3.6,
+    3.2
+   ],
+   "length": 3.2,
+   "sigma": 0.014,
+   "height": 2.42,
+   "normal": [
+    -1.0,
+    0.0
+   ],
+   "inlier_rms": 0.005
+  },
+  {
+   "id": "w2",
+   "a": [
+    3.6,
+    3.2
+   ],
+   "b": [
+    0,
+    3.2
+   ],
+   "length": 3.6,
+   "sigma": 0.012,
+   "height": 2.42,
+   "normal": [
+    -0.0,
+    -1.0
+   ],
+   "inlier_rms": 0.006
+  },
+  {
+   "id": "w3",
+   "a": [
+    0,
+    3.2
+   ],
+   "b": [
+    0,
+    0
+   ],
+   "length": 3.2,
+   "sigma": 0.031,
+   "height": 2.42,
+   "normal": [
+    1.0,
+    0.0
+   ],
+   "inlier_rms": 0.007
+  }
+ ],
+ "openings": [
+  {
+   "id": "d0",
+   "type": "door",
+   "wall": "w0",
+   "offset": 1.19,
+   "width": 0.72,
+   "sill": 0.0,
+   "height": 2.04,
+   "sigma": 0.012,
+   "name": "bedroom door"
+  },
+  {
+   "id": "win0",
+   "type": "window",
+   "wall": "w2",
+   "offset": 1.2,
+   "width": 1.2,
+   "sill": 0.9,
+   "height": 1.2,
+   "sigma": 0.015
+  }
+ ],
+ "obstacles": [
+  {
+   "id": "o0",
+   "label": "heater",
+   "min": [
+    3.45,
+    0.0,
+    1.3
+   ],
+   "max": [
+    3.6,
+    0.62,
+    2.1
+   ]
+  }
+ ],
+ "coverage": {
+  "score": 0.93,
+  "gaps": [
+   {
+    "wall": "w3",
+    "from": 0.4,
+    "to": 1.1,
+    "reason": "no points (mirror)"
+   }
+  ]
+ },
+ "qa": [
+  {
+   "severity": "warn",
+   "message": "Wall w3 has a 0.7 m coverage gap (mirror?), so its length is less certain (\u00b13 cm). Rescan that wall at an angle.",
+   "action": "rescan"
+  },
+  {
+   "severity": "info",
+   "message": "ArUco scale check agrees within 0.4%.",
+   "action": "ok"
+  }
+ ]
+}

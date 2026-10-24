@@ -1,0 +1,251 @@
+{
+ "version": 1,
+ "name": "Living room",
+ "source": {
+  "type": "pointcloud",
+  "file": "living_room.ply",
+  "points": 1203511
+ },
+ "floor": {
+  "polygon": [
+   [
+    0,
+    0
+   ],
+   [
+    6,
+    0
+   ],
+   [
+    6,
+    3
+   ],
+   [
+    3.5,
+    3
+   ],
+   [
+    3.5,
+    5.5
+   ],
+   [
+    0,
+    5.5
+   ]
+  ],
+  "area_m2": 26.75
+ },
+ "ceiling_height": {
+  "value": 2.55,
+  "sigma": 0.01
+ },
+ "walls": [
+  {
+   "id": "w0",
+   "a": [
+    0,
+    0
+   ],
+   "b": [
+    6,
+    0
+   ],
+   "length": 6.0,
+   "sigma": 0.013,
+   "height": 2.55,
+   "normal": [
+    -0.0,
+    1.0
+   ],
+   "inlier_rms": 0.004
+  },
+  {
+   "id": "w1",
+   "a": [
+    6,
+    0
+   ],
+   "b": [
+    6,
+    3
+   ],
+   "length": 3.0,
+   "sigma": 0.012,
+   "height": 2.55,
+   "normal": [
+    -1.0,
+    0.0
+   ],
+   "inlier_rms": 0.005
+  },
+  {
+   "id": "w2",
+   "a": [
+    6,
+    3
+   ],
+   "b": [
+    3.5,
+    3
+   ],
+   "length": 2.5,
+   "sigma": 0.016,
+   "height": 2.55,
+   "normal": [
+    -0.0,
+    -1.0
+   ],
+   "inlier_rms": 0.006
+  },
+  {
+   "id": "w3",
+   "a": [
+    3.5,
+    3
+   ],
+   "b": [
+    3.5,
+    5.5
+   ],
+   "length": 2.5,
+   "sigma": 0.012,
+   "height": 2.55,
+   "normal": [
+    -1.0,
+    0.0
+   ],
+   "inlier_rms": 0.007
+  },
+  {
+   "id": "w4",
+   "a": [
+    3.5,
+    5.5
+   ],
+   "b": [
+    0,
+    5.5
+   ],
+   "length": 3.5,
+   "sigma": 0.014,
+   "height": 2.55,
+   "normal": [
+    -0.0,
+    -1.0
+   ],
+   "inlier_rms": 0.008
+  },
+  {
+   "id": "w5",
+   "a": [
+    0,
+    5.5
+   ],
+   "b": [
+    0,
+    0
+   ],
+   "length": 5.5,
+   "sigma": 0.018,
+   "height": 2.55,
+   "normal": [
+    1.0,
+    0.0
+   ],
+   "inlier_rms": 0.009
+  }
+ ],
+ "openings": [
+  {
+   "id": "d0",
+   "type": "door",
+   "wall": "w4",
+   "offset": 1.6,
+   "width": 0.82,
+   "sill": 0.0,
+   "height": 2.04,
+   "sigma": 0.01,
+   "name": "front door"
+  },
+  {
+   "id": "d1",
+   "type": "door",
+   "wall": "w1",
+   "offset": 0.75,
+   "width": 1.5,
+   "sill": 0.0,
+   "height": 2.1,
+   "sigma": 0.015,
+   "name": "garden slider",
+   "swing": "none"
+  },
+  {
+   "id": "win0",
+   "type": "window",
+   "wall": "w0",
+   "offset": 1.0,
+   "width": 2.0,
+   "sill": 0.45,
+   "height": 1.6,
+   "sigma": 0.02
+  },
+  {
+   "id": "win1",
+   "type": "window",
+   "wall": "w3",
+   "offset": 0.8,
+   "width": 1.0,
+   "sill": 0.9,
+   "height": 1.2,
+   "sigma": 0.02
+  }
+ ],
+ "obstacles": [
+  {
+   "id": "o0",
+   "label": "built-in TV unit",
+   "min": [
+    0.0,
+    0.0,
+    1.6
+   ],
+   "max": [
+    0.45,
+    0.6,
+    3.4
+   ]
+  },
+  {
+   "id": "o1",
+   "label": "column",
+   "min": [
+    3.2,
+    0.0,
+    2.7
+   ],
+   "max": [
+    3.5,
+    2.55,
+    3.0
+   ]
+  }
+ ],
+ "coverage": {
+  "score": 0.88,
+  "gaps": [
+   {
+    "wall": "w2",
+    "from": 0.3,
+    "to": 1.4,
+    "reason": "occluded"
+   }
+  ]
+ },
+ "qa": [
+  {
+   "severity": "warn",
+   "message": "Coverage 88%: wall w2 was partly hidden behind the column. Rescan the inside corner.",
+   "action": "rescan"
+  }
+ ]
+}
