@@ -54,12 +54,28 @@ def health():
     return {"ok": True, "scans": len(list(SCANS.iterdir()))}
 
 
+# Public demo server: cap paid model calls per day so the shared key can't be drained.
+LLM_DAILY_CAP = int(os.environ.get("ROOMTWIN_LLM_DAILY_CAP", "300"))
+_llm_calls = {"day": "", "n": 0}
+
+
+def llm_budget_ok() -> bool:
+    today = time.strftime("%Y-%m-%d")
+    if _llm_calls["day"] != today:
+        _llm_calls.update(day=today, n=0)
+    if _llm_calls["n"] >= LLM_DAILY_CAP:
+        return False
+    _llm_calls["n"] += 1
+    return True
+
+
 @app.post("/api/extract")
 def api_extract(req: ExtractReq):
     if not req.url.startswith(("http://", "https://")):
         raise HTTPException(400, "Give a full product link starting with http.")
+    use_llm = bool(os.environ.get("ANTHROPIC_API_KEY")) and llm_budget_ok()
     try:
-        return extractor.extract(req.url, use_llm=bool(os.environ.get("ANTHROPIC_API_KEY")))
+        return extractor.extract(req.url, use_llm=use_llm)
     except LookupError as e:
         raise HTTPException(422, str(e))
     except httpx.HTTPError as e:
@@ -148,6 +164,8 @@ def api_scan_file(sid: str, name: str):
 @app.post("/api/coach")
 def api_coach(req: CoachReq):
     import coach  # imported lazily: needs the API key
+    if not llm_budget_ok():
+        raise HTTPException(429, "Daily limit for the scan coach reached on this demo server.")
     d = (SCANS / req.id).resolve()
     if not str(d).startswith(str(SCANS.resolve())) or not (d / "room.json").exists():
         raise HTTPException(404, "scan not found")
