@@ -1,5 +1,6 @@
 // RoomTwin web app: state, panels and glue between the plan, 3D and logistics.
-import { worldFromRoom, worldFromHouse, roomAt, openingByKey, openingLabel } from './core/world.js';
+import { worldFromRoom, worldFromHouse, roomAt, openingByKey, openingLabel, isPassable } from './core/world.js';
+import { pointInPolygon, pointObbDistance, pointInObb, pointSegmentDistance, raySegment } from './core/geom.js';
 import { evaluatePlacement, snapToWall } from './logistics/placement.js';
 import { checkDoors } from './logistics/plan.js';
 import { buildEnv, itemObb, obstacleObb } from './logistics/env.js';
@@ -9,7 +10,7 @@ import { PlanView } from './plan2d.js';
 import { loadFromUrl, loadFromFiles, sourceForSave } from './loader.js';
 import { CATALOGUE, ITEM_COLOURS } from './catalogue.js';
 import { extractFromUrl, uploadScan, coachScan, scanRoomUrl, SCAN_EXT } from './api.js';
-import { scanCardHtml } from './scancheck.js';
+import { scanCardHtml, qaGroupsHtml } from './scancheck.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -25,6 +26,7 @@ const S = {
   stamp: 0, orderIndex: null, nextId: 1,
   // uploaded scans: the open attempt, this session's attempts, a running coach call, the wall to pulse on the plan
   scan: null, attempts: [], coachRun: null, highlightWall: null, traceOpen: false,
+  qaOpen: new Set(), // rooms whose full QA list is expanded
 };
 
 // ---------------------------------------------------------------- views
@@ -33,9 +35,10 @@ const plan = new PlanView(planCanvas, {
   getState: () => S,
   insets: () => {
     if (!isSheetLayout()) return { top: 0, bottom: 56 };
-    const p = $('#panel').getBoundingClientRect();
-    return { top: 0, bottom: p.height + 54, top: 52, bottomTools: p.height + 56 };
+    // phone: toggles across the top, the bottom sheet over the lower part
+    return { top: 62, bottom: sheetHeight() + 14, bottomTools: sheetHeight() + 4, scaleLeft: true };
   },
+  onViewChange: () => updateFitButton(),
   onSelect: (id) => select(id),
   onMove: (id, pos, phase, noSnap) => moveItem(id, pos, phase, noSnap),
   onRotate: (id, yaw, phase) => rotateItem(id, yaw, phase),
@@ -51,7 +54,7 @@ let sceneLoading = null;
 async function ensureScene() {
   if (scene) return scene;
   if (!sceneLoading) {
-    $('#loading3d').hidden = false;
+    $('#loading3d').hidden = S.view === 'plan';
     sceneLoading = import('./scene3d.js').then(({ Scene3D }) => {
       $('#loading3d').hidden = true;
       const el = $('#three');
@@ -61,6 +64,8 @@ async function ensureScene() {
         onMove: (id, pos, phase, noSnap) => moveItem(id, pos, phase, noSnap),
         walkUi: () => ({ joystick: $('#joystick'), knob: $('#joystick .knob'), hint: $('#walkHint'), crosshair: $('#crosshair') }),
         onTick: () => {},
+        insets: () => (isSheetLayout() ? { top: S.view === 'walk' ? 0 : 62, bottom: sheetHeight() } : { top: 0, bottom: S.view === 'walk' ? 0 : 60 }),
+        onViewChange: () => updateFitButton(),
         onMeshLoaded: () => { $('#optMeshWrap').hidden = false; },
         onMeshError: (u) => toast(`Could not load the scan mesh (${u.split('/').pop()}).`, 'bad'),
       });
@@ -91,7 +96,8 @@ async function setView(v) {
   $$('#viewTabs button').forEach((b) => b.classList.toggle('on', b.dataset.view === v));
   document.body.classList.toggle('view-plan', v === 'plan');
   document.body.classList.toggle('view-walk', v === 'walk');
-  if (v === 'walk' && isSheetLayout()) { document.body.classList.remove('sheet-full'); document.body.classList.add('sheet-collapsed'); }
+  if (v === 'walk' && isSheetLayout()) setSheet('peek');
+  updateFitButton();
   if (v === 'plan') {
     $('#three').hidden = true;
     planCanvas.hidden = false;
@@ -103,6 +109,7 @@ async function setView(v) {
   plan.setVisible(false);
   planCanvas.hidden = true;
   $('#three').hidden = false;
+  if (!scene) $('#loading3d').hidden = false;
   try { await ensureScene(); } catch { setView('plan'); return; }
   if (S.view !== v) return;
   if (prev === 'orbit' && v === 'walk') scene.saveOrbit();
@@ -111,16 +118,79 @@ async function setView(v) {
   else scene.setMode('orbit');
   syncScene();
   updateItemTools();
+  updateFitButton();
 }
 
+// Walk mode starts inside the primary room, just in from its door, looking into the
+// room towards its open floor; never inside a wall, scanned furniture or an item.
 function walkStart() {
-  const op = openingByKey(S.world, S.entryKey);
-  if (op) {
-    const p = [op.center[0] + op.normalIn[0] * 0.7, op.center[1] + op.normalIn[1] * 0.7];
-    return { x: p[0], z: p[1], dir: op.normalIn };
+  const w = S.world;
+  const room = w.rooms[0];
+  const cols = walkColliders();
+  const R = 0.32;
+  const free = (p, r = room) => {
+    if (!pointInPolygon(p, r.polygon)) return false;
+    for (const s of cols.segments) if (pointSegmentDistance(p, [s[0], s[1]], [s[2], s[3]]) < R) return false;
+    for (const o of cols.boxes) if (pointInObb(p, o) || pointObbDistance(p, o) < R) return false;
+    return true;
+  };
+  const target = openFloorPoint(room, free) || room.centroid;
+  // look into the room: the direction (within 80 degrees of "inwards") with the deepest
+  // view to the far wall, nudged towards the open floor, so it never opens on a blank wall
+  const lookFrom = (p, inward) => {
+    const base = Math.atan2(inward[1], inward[0]);
+    const toT = Math.atan2(target[1] - p[1], target[0] - p[0]);
+    let best = inward, bestScore = -Infinity;
+    for (let da = -80; da <= 80; da += 5) {
+      const ang = base + da * Math.PI / 180;
+      const dir = [Math.cos(ang), Math.sin(ang)];
+      let depth = 8;
+      for (const s of cols.segments) depth = Math.min(depth, raySegment(p, dir, [s[0], s[1]], [s[2], s[3]]));
+      const score = depth * (0.8 + 0.2 * Math.cos(ang - toT));
+      if (score > bestScore) { bestScore = score; best = dir; }
+    }
+    return best;
+  };
+  // the room's doors: the one into the rest of the home first, then the entry, then any
+  const doors = w.openings.filter((o) => o.roomId === room.id && isPassable(o))
+    .sort((a, b) => (b.partner ? 2 : b.key === S.entryKey ? 1 : 0) - (a.partner ? 2 : a.key === S.entryKey ? 1 : 0));
+  for (const op of doors) {
+    for (const d of [0.65, 0.85, 0.5, 1.1, 1.4]) {
+      for (const lat of [0, 0.2, -0.2, 0.4, -0.4]) {
+        const p = [op.center[0] + op.normalIn[0] * d + op.dir[0] * lat, op.center[1] + op.normalIn[1] * d + op.dir[1] * lat];
+        if (free(p)) return { x: p[0], z: p[1], dir: lookFrom(p, op.normalIn) };
+      }
+    }
   }
-  const r = S.world.rooms[0];
-  return { x: r.centroid[0], z: r.centroid[1], dir: [0, -1] };
+  // no usable door: the entry of the home, looking in
+  const op = openingByKey(w, S.entryKey);
+  if (op) {
+    const r = w.rooms.find((x) => x.id === op.roomId) || room;
+    for (const d of [0.7, 1, 0.5]) {
+      const p = [op.center[0] + op.normalIn[0] * d, op.center[1] + op.normalIn[1] * d];
+      if (free(p, r)) return { x: p[0], z: p[1], dir: lookFrom(p, op.normalIn) };
+    }
+  }
+  const p = target;
+  return { x: p[0], z: p[1], dir: [0, -1] };
+}
+
+// The most open point of a room's floor (far from walls and furniture).
+function openFloorPoint(room, free) {
+  const xs = room.polygon.map((p) => p[0]), zs = room.polygon.map((p) => p[1]);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), z0 = Math.min(...zs), z1 = Math.max(...zs);
+  const step = Math.max(0.08, Math.min(x1 - x0, z1 - z0) / 24);
+  let best = null;
+  for (let x = x0 + step / 2; x < x1; x += step) for (let z = z0 + step / 2; z < z1; z += step) {
+    const p = [x, z];
+    if (!free(p)) continue;
+    let d = Infinity;
+    for (let i = 0; i < room.polygon.length; i++) d = Math.min(d, pointSegmentDistance(p, room.polygon[i], room.polygon[(i + 1) % room.polygon.length]));
+    for (const o of S.world.obstacles) d = Math.min(d, pointObbDistance(p, o) + 0.2);
+    const score = d - 0.05 * Math.hypot(x - room.centroid[0], z - room.centroid[1]);
+    if (!best || score > best.score) best = { p, score };
+  }
+  return best?.p || null;
 }
 
 let colliderCache = { stamp: -1, value: null };
@@ -159,7 +229,7 @@ async function loadSource(src) {
   S.highlightWall = null;
   setScanParam(S.scan?.id || null);
   $('#empty').hidden = true;
-  document.body.classList.remove('no-room');
+  document.body.classList.remove('no-room', 'booting');
   $('#optMeshWrap').hidden = true;
   plan.setWorld(world);
   if (scene) scene.setWorld(world, src.meshUrls);
@@ -173,9 +243,12 @@ async function loadSource(src) {
   const t = world.kind === 'house' ? `${world.rooms.length} rooms` : `${world.rooms[0].area.toFixed(1)} m²`;
   $('#roomTitle').innerHTML = `<b>${esc(world.name)}</b> · ${t}`;
   document.title = `${world.name} · RoomTwin`;
+  renderPeek();
+  updateFitButton();
 }
 
 async function openUrl(url) {
+  document.body.classList.add('busy');
   try {
     const src = await loadFromUrl(url);
     await loadSource(src);
@@ -183,6 +256,8 @@ async function openUrl(url) {
   } catch (err) {
     toast(err.message || String(err), 'bad', 6000);
     return false;
+  } finally {
+    document.body.classList.remove('busy');
   }
 }
 
@@ -214,9 +289,9 @@ async function openScan(attempt) {
   const src = await loadFromUrl(scanRoomUrl(attempt.id));
   attempt.coverage = src.raw.coverage?.score ?? attempt.coverage ?? null;
   if (!attempt.qa?.length) {
-    // a house.json carries QA per room; prefix each finding with its room name
+    // a house.json carries QA per room; tag each finding with its room
     attempt.qa = src.raw.qa || (src.raw.rooms || []).flatMap((r) =>
-      (r.room?.qa || []).map((q) => ({ ...q, message: `${r.name || r.id}: ${q.message}` })));
+      (r.room?.qa || []).map((q) => ({ ...q, room: r.name || r.id })));
   }
   if (!src.raw.name) src.raw = { ...src.raw, name: `Room scan ${attempt.n}` };
   src.scan = attempt;
@@ -320,7 +395,7 @@ async function startScanUpload(file) {
       throw new Error(`Measured, but the plan would not load: ${err.message}`);
     }
     upHide();
-    if (isSheetLayout()) document.body.classList.remove('sheet-collapsed');
+    if (isSheetLayout()) setSheet('half');
     $('#panel').scrollTop = 0;
     toast(`Measured in ${res.processing_s ?? '?'} s. Ask the coach whether the scan is good enough.`, 'ok', 5000);
   } catch (err) {
@@ -340,7 +415,23 @@ function renderScanCard() {
   $('#qaList').hidden = !!sc; // the scan card lists the QA instead
   if (!sc) return;
   const run = S.coachRun?.id === sc.id ? S.coachRun : null;
-  card.innerHTML = scanCardHtml({ scan: sc, attempts: S.attempts, coach: run || sc.coach, traceOpen: S.traceOpen });
+  card.innerHTML = scanCardHtml({ scan: sc, attempts: S.attempts, coach: run || sc.coach, traceOpen: S.traceOpen, describeWall, qaOpen: S.qaOpen });
+  renderPeek();
+}
+
+// "Main room", "w0" -> which side of the plan the wall is on, and what is in it.
+function describeWall(roomName, wallId) {
+  const w = S.world;
+  if (!w) return null;
+  const room = w.rooms.find((r) => r.name === roomName || r.id === roomName) || (w.rooms.length === 1 ? w.rooms[0] : null);
+  const wall = room ? w.walls.find((x) => x.roomId === room.id && x.id === wallId) : w.walls.find((x) => x.id === wallId);
+  if (!wall) return null;
+  const [nx, nz] = wall.normalIn;
+  // the inward normal points away from the wall; screen y is world z
+  const side = Math.abs(nz) >= Math.abs(nx) ? (nz > 0 ? 'top' : 'bottom') : (nx > 0 ? 'left' : 'right');
+  const ops = wall.openings.map((k) => openingByKey(w, k)).filter(Boolean);
+  const feature = ops.some((o) => o.key === S.entryKey) ? 'entry' : ops.some((o) => o.type === 'door') ? 'door' : ops.some((o) => o.type === 'window') ? 'window' : '';
+  return { roomId: wall.roomId, side, feature };
 }
 
 function applyCoach(res, fresh) {
@@ -349,9 +440,12 @@ function applyCoach(res, fresh) {
   plan.requestRender();
 }
 
-function showWall(id) {
-  if (!S.world?.walls.some((w) => w.id === id)) { toast(`Wall ${id} is not in this plan.`); return; }
-  S.highlightWall = { wall: id, label: S.scan?.coach?.decision === 'rescan' && S.scan.coach.wall_id === id ? `Rescan wall ${id}` : `Wall ${id}` };
+function showWall(id, roomId) {
+  if (!S.world?.walls.some((w) => w.id === id && (!roomId || w.roomId === roomId))) { toast(`Wall ${id} is not in this plan.`); return; }
+  const room = roomId && S.world.rooms.length > 1 ? S.world.rooms.find((r) => r.id === roomId) : null;
+  const name = room ? `${room.name} · wall ${id}` : `Wall ${id}`;
+  S.highlightWall = { wall: id, room: roomId || null, label: S.scan?.coach?.decision === 'rescan' && S.scan.coach.wall_id === id ? `Rescan wall ${id}` : name };
+  if (isSheetLayout() && S.sheet === 'full') setSheet('half');
   if (S.view !== 'plan') setView('plan');
   plan.requestRender();
 }
@@ -535,6 +629,7 @@ function refreshAll(opts = {}) {
   syncScene();
   renderItems(opts);
   updateItemTools();
+  if (!opts.light) renderPeek();
 }
 
 function updateItemTools() {
@@ -561,11 +656,8 @@ function renderRoomCard() {
     <div class="stat"><div class="k">Ceiling</div><div class="v">${cmin === cmax ? cmin.toFixed(2) : `${cmin.toFixed(2)}-${cmax.toFixed(2)}`} <small>m${csig ? sigmaTxt(csig) : ''}</small></div></div>
     <div class="stat"><div class="k">Walls measured</div><div class="v">${w.walls.length} <small>${worst != null ? `worst ±${Math.max(1, Math.round(worst * 100))} cm` : ''}</small></div></div>
     <div class="stat"><div class="k">Scan coverage</div><div class="v">${cov != null ? `${Math.round(cov * 100)}<small>%</small>` : '<small>n/a</small>'}</div>${cov != null ? `<div class="meter"><i style="width:${Math.round(cov * 100)}%"></i></div>` : ''}</div>`;
-  const qa = w.rooms.flatMap((r) => (r.qa || []).map((q) => ({ ...q, room: r.name })));
-  $('#qaList').innerHTML = qa.map((q) => `
-    <div class="q ${q.severity === 'warn' || q.severity === 'error' ? 'warn' : 'info'}"><span class="dot"></span>
-      <div>${q.action && q.action !== 'ok' ? `<div class="tag">${esc(q.action === 'rescan' ? 'Rescan suggested' : q.action === 'marker' ? 'Add a marker' : q.action)}</div>` : ''}
-      ${w.kind === 'house' ? `<b>${esc(q.room)}:</b> ` : ''}${esc(q.message)}</div></div>`).join('');
+  const qa = w.rooms.flatMap((r) => (r.qa || []).map((q) => ({ ...q, room: w.kind === 'house' ? r.name : undefined })));
+  $('#qaList').innerHTML = qa.length ? qaGroupsHtml(qa, { describeWall, open: S.qaOpen }) : '';
   const rows = [];
   for (const r of w.rooms) {
     if (w.kind === 'house') rows.push(`<tr class="hl"><td colspan="2">${esc(r.name)}</td></tr>`);
@@ -655,7 +747,7 @@ function renderItems(opts = {}) {
         <span class="pill">${statusPill(it)}</span>
       </div>
       ${sel ? `<div class="body">
-        ${bad ? `<ul class="problems">${st.problems.map((p) => `<li>${esc(p.text)}</li>`).join('')}</ul>` : ''}
+        ${bad ? `<ul class="problems">${[...new Set(st.problems.map((p) => p.text))].map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
         ${doorBlock(it)}
         ${routeBlock(it)}
         <div class="row gap mt wrap">
@@ -1029,15 +1121,108 @@ async function screenshot() {
 
 function isSheetLayout() { return matchMedia('(max-width: 820px)').matches; }
 
-function cycleSheet() {
-  const b = document.body;
-  if (b.classList.contains('sheet-collapsed')) { b.classList.remove('sheet-collapsed'); }
-  else if (b.classList.contains('sheet-full')) { b.classList.remove('sheet-full'); b.classList.add('sheet-collapsed'); }
-  else b.classList.add('sheet-full');
-  setTimeout(() => plan.resize(), 220);
+// ---------------------------------------------------------------- bottom sheet (phones)
+// Three resting heights: peek (title row + primary action), half, full. Drag the top
+// of the sheet or tap it to step through them.
+S.sheet = 'peek';
+const SHEETS = ['peek', 'half', 'full'];
+function sheetPx(state) {
+  const H = $('main').getBoundingClientRect().height;
+  if (state === 'peek') return Math.min(H * 0.4, $('#sheetTop').getBoundingClientRect().height + 2);
+  if (state === 'half') return Math.round(H * 0.52);
+  return H - 8;
+}
+function sheetHeight() { return isSheetLayout() ? $('#panel').getBoundingClientRect().height : 0; }
+function setSheet(state) {
+  S.sheet = state;
+  document.body.dataset.sheet = state;
+  const panel = $('#panel');
+  panel.style.height = '';
+  $('#sheetHandle').setAttribute('aria-label', state === 'full' ? 'Collapse panel' : 'Expand panel');
+  $('#sheetHandle').setAttribute('aria-expanded', String(state !== 'peek'));
+  if (state === 'peek') panel.scrollTop = 0;
+  setTimeout(() => plan.resize(), 230);
+}
+function cycleSheet() { setSheet(S.sheet === 'peek' ? 'half' : S.sheet === 'half' ? 'full' : 'peek'); }
+function openSheetAt(sel) {
+  if (isSheetLayout() && S.sheet === 'peek') setSheet('half');
+  setTimeout(() => { const el = $(sel); if (el) $('#panel').scrollTo({ top: el.offsetTop - $('#sheetTop').offsetHeight - 6, behavior: 'smooth' }); }, isSheetLayout() ? 240 : 0);
+}
+
+function bindSheetDrag() {
+  const top = $('#sheetTop'), panel = $('#panel');
+  let d = null;
+  top.addEventListener('pointerdown', (e) => {
+    if (!isSheetLayout() || e.target.closest('#peekAction')) return;
+    d = { id: e.pointerId, y0: e.clientY, h0: panel.getBoundingClientRect().height, t0: performance.now(), moved: false };
+    try { top.setPointerCapture(e.pointerId); } catch { /* pointer already gone */ }
+  });
+  top.addEventListener('pointermove', (e) => {
+    if (!d || e.pointerId !== d.id) return;
+    const dy = e.clientY - d.y0;
+    if (!d.moved && Math.abs(dy) < 6) return;
+    if (!d.moved) { d.moved = true; document.body.classList.add('sheet-dragging'); }
+    const h = Math.max(sheetPx('peek'), Math.min(sheetPx('full'), d.h0 - dy));
+    panel.style.height = `${h}px`;
+    d.last = { y: e.clientY, t: performance.now() };
+  });
+  const end = (e) => {
+    if (!d || e.pointerId !== d.id) return;
+    const g = d; d = null;
+    document.body.classList.remove('sheet-dragging');
+    if (!g.moved) { if (!e.target.closest('#peekAction')) cycleSheet(); return; }
+    const h = panel.getBoundingClientRect().height;
+    const v = g.last ? (g.y0 - g.last.y) / Math.max(1, g.last.t - g.t0) : 0; // px/ms, + = upwards
+    let best = SHEETS.reduce((a, b) => (Math.abs(sheetPx(b) - h) < Math.abs(sheetPx(a) - h) ? b : a));
+    if (Math.abs(v) > 0.5) { const i = SHEETS.indexOf(S.sheet); best = SHEETS[Math.max(0, Math.min(2, i + (v > 0 ? 1 : -1)))]; }
+    setSheet(best);
+  };
+  top.addEventListener('pointerup', end);
+  top.addEventListener('pointercancel', end);
+  // a click on the handle from the keyboard
+  $('#sheetHandle').addEventListener('click', (e) => { if (e.detail === 0) cycleSheet(); });
+}
+
+// The peek row: what is open, and the one thing to do next.
+function renderPeek() {
+  if (!S.world) return;
+  const w = S.world;
+  const area = w.rooms.reduce((s, r) => s + r.area, 0);
+  $('#peekTitle').textContent = w.name;
+  const bad = S.items.filter((i) => (S.status[i.id] && !S.status[i.id].ok) || S.fits[i.id]?.verdict === 'no').length;
+  let sub;
+  if (S.items.length) sub = `${S.items.length} item${S.items.length > 1 ? 's' : ''} · ${bad ? `${bad} need${bad > 1 ? '' : 's'} attention` : 'all fit'}`;
+  else sub = `${w.kind === 'house' ? `${w.rooms.length} rooms · ` : ''}${area.toFixed(1)} m²${S.scan?.coach?.decision === 'accept' ? ' · scan accepted' : ''}`;
+  $('#peekSub').textContent = sub;
+  const btn = $('#peekAction');
+  if (S.items.length) { btn.textContent = 'Move-in plan'; btn.dataset.go = '#moveCard'; }
+  else { btn.textContent = 'Add furniture'; btn.dataset.go = '#furnCard'; }
+}
+
+function updateFitButton() {
+  const b = $('#btnFit');
+  if (!S.world) { b.hidden = true; return; }
+  if (S.view === 'plan') b.hidden = !!plan.autoFit;
+  else if (S.view === 'orbit') b.hidden = !scene || !scene.userMoved;
+  else b.hidden = true;
+}
+
+function toggleMenu(open) {
+  const m = $('#moreMenu');
+  const show = open ?? m.hidden;
+  m.hidden = !show;
+  $('#btnMore').setAttribute('aria-expanded', String(show));
 }
 
 // ---------------------------------------------------------------- wiring
+// remember which room's full QA list is open across re-renders
+function qaToggle(e) {
+  const d = e.target;
+  if (!d.matches?.('details.qa-more')) return;
+  const k = d.dataset.room || '';
+  if (d.open) S.qaOpen.add(k); else S.qaOpen.delete(k);
+}
+
 function wire() {
   renderCatalogue();
   document.body.classList.add('view-plan');
@@ -1058,10 +1243,10 @@ function wire() {
     const act = el.dataset.act;
     if (act === 'coach') askCoach();
     else if (act === 'rescan') pickScan();
-    else if (act === 'showwall') showWall(el.dataset.wall);
+    else if (act === 'showwall') showWall(el.dataset.wall, el.dataset.room);
     else if (act === 'openscan' && el.dataset.scan !== S.scan?.id) openScanById(el.dataset.scan);
   });
-  scanCard.addEventListener('toggle', (e) => { if (e.target.matches?.('details.trace')) S.traceOpen = e.target.open; }, true);
+  scanCard.addEventListener('toggle', (e) => { if (e.target.matches?.('details.trace')) S.traceOpen = e.target.open; qaToggle(e); }, true);
   fileInput.addEventListener('change', () => { if (fileInput.files.length) openFiles(fileInput.files); fileInput.value = ''; });
   $('#sampleSel').addEventListener('change', (e) => { if (e.target.value) openUrl(e.target.value); e.target.value = ''; });
   $$('.sample').forEach((b) => b.addEventListener('click', () => openUrl(b.dataset.src)));
@@ -1108,7 +1293,30 @@ function wire() {
     if (b.dataset.act === 'rot90') rotateSelected(90);
     if (b.dataset.act === 'del' && S.selectedId) removeItem(S.selectedId);
   });
-  $('#sheetHandle').addEventListener('click', cycleSheet);
+  bindSheetDrag();
+  setSheet('peek');
+  $('#peekAction').addEventListener('click', (e) => openSheetAt(e.currentTarget.dataset.go || '#furnCard'));
+  $('#btnFit').addEventListener('click', () => {
+    if (S.view === 'plan') plan.fit();
+    else if (scene) { scene.fit(); }
+    updateFitButton();
+  });
+  $('#btnMore').addEventListener('click', (e) => { e.stopPropagation(); toggleMenu(); });
+  $('#moreMenu').addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    toggleMenu(false);
+    if (b.dataset.src) openUrl(b.dataset.src);
+    else if (b.dataset.menu === 'open') pick();
+    else if (b.dataset.menu === 'save') exportLayout();
+    else if (b.dataset.menu === 'shot') screenshot();
+  });
+  document.addEventListener('pointerdown', (e) => { if (!$('#moreMenu').hidden && !e.target.closest('#moreMenu, #btnMore')) toggleMenu(false); });
+  $('#roomCard').addEventListener('toggle', qaToggle, true);
+  $('#roomCard').addEventListener('click', (e) => {
+    const el = e.target.closest('[data-act="showwall"]');
+    if (el) showWall(el.dataset.wall, el.dataset.room);
+  });
 
   window.addEventListener('keydown', (e) => {
     if (/INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName) || dlg.open) return;
@@ -1146,11 +1354,16 @@ function wire() {
   const view = qs.get('view');
   const scanId = qs.get('scan');
   S.attempts = loadAttempts();
-  if (scanId) openScanById(scanId).then((ok) => { if (ok && view && ['plan', 'orbit', '3d', 'walk'].includes(view)) setView(view === '3d' ? 'orbit' : view); });
-  else if (room) openUrl(room).then((ok) => { if (ok && view && ['plan', 'orbit', '3d', 'walk'].includes(view)) setView(view === '3d' ? 'orbit' : view); });
+  if (scanId || room) {
+    document.body.classList.add('booting');
+    $('#bootText').textContent = scanId ? 'Opening your scan…' : 'Opening the plan…';
+  }
+  const booted = () => document.body.classList.remove('booting');
+  if (scanId) openScanById(scanId).then((ok) => { booted(); if (ok && view && ['plan', 'orbit', '3d', 'walk'].includes(view)) setView(view === '3d' ? 'orbit' : view); });
+  else if (room) openUrl(room).then((ok) => { booted(); if (ok && view && ['plan', 'orbit', '3d', 'walk'].includes(view)) setView(view === '3d' ? 'orbit' : view); });
 }
 
 wire();
 
 // Exposed for debugging and automated checks.
-window.roomtwin = { S, setView, openUrl, addItem, checkRoute, planOrder, playOrder, select, setEntry, startScanUpload, openScanById, askCoach, CATALOGUE, plan, get scene() { return scene; } };
+window.roomtwin = { S, setView, setSheet, openUrl, addItem, checkRoute, planOrder, playOrder, select, setEntry, startScanUpload, openScanById, askCoach, CATALOGUE, plan, get scene() { return scene; } };

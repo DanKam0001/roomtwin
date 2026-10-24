@@ -113,7 +113,7 @@ function describeRef(world, items, ref) {
   const it = items.find((i) => i.id === ref);
   if (it) return `the ${it.name}`;
   const ob = world.obstacles.find((o) => o.key === ref);
-  if (ob) return `the ${ob.label}`;
+  if (ob) return /^(unknown|obstacle|object)?$/i.test(ob.label || '') ? 'the existing furniture' : `the ${ob.label}`;
   return 'something';
 }
 

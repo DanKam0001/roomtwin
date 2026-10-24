@@ -1,0 +1,1624 @@
+{
+ "version": 1,
+ "type": "house",
+ "name": "Scanned home",
+ "frame": "shared frame of the primary room (rooms[0]); metres, y up, floor at y = 0; every room is already in it, so each transform is identity",
+ "rooms": [
+  {
+   "id": "room1",
+   "name": "Main room",
+   "transform": {
+    "x": 0,
+    "z": 0,
+    "rot": 0
+   },
+   "room": {
+    "version": 1,
+    "generator": "roomtwin 0.1.0 / OpenCV 5.0.0",
+    "source": {
+     "type": "pointcloud",
+     "file": "scan.ply",
+     "loader": "cv2.loadPointCloud",
+     "points": 2019282
+    },
+    "frame": "metres; y up, floor at y = 0; polygon counter-clockwise in (x, z); wall normals point into the room",
+    "transform": [
+     [
+      0.8963,
+      0.0043,
+      -0.4435,
+      4.4449
+     ],
+     [
+      -0.0023,
+      1.0,
+      0.0049,
+      1.1524
+     ],
+     [
+      0.4435,
+      -0.0034,
+      0.8963,
+      3.0959
+     ],
+     [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+     ]
+    ],
+    "floor": {
+     "polygon": [
+      [
+       4.1761,
+       0.0
+      ],
+      [
+       4.2431,
+       1.9923
+      ],
+      [
+       4.8458,
+       1.9964
+      ],
+      [
+       4.8409,
+       2.9932
+      ],
+      [
+       0.0324,
+       2.9918
+      ],
+      [
+       0.0,
+       0.0344
+      ]
+     ],
+     "area_m2": 13.11
+    },
+    "ceiling_height": {
+     "value": 2.3992,
+     "sigma": 0.0072,
+     "observed": true
+    },
+    "walls": [
+     {
+      "id": "w0",
+      "a": [
+       4.1761,
+       0.0
+      ],
+      "b": [
+       4.2431,
+       1.9923
+      ],
+      "length": 1.9934,
+      "sigma": 0.006,
+      "height": 2.3882,
+      "normal": [
+       -0.9994,
+       0.0336
+      ],
+      "inlier_rms": 0.0079,
+      "n_eff": 4506,
+      "inferred": false,
+      "coverage": 0.768
+     },
+     {
+      "id": "w1",
+      "a": [
+       4.2431,
+       1.9923
+      ],
+      "b": [
+       4.8458,
+       1.9964
+      ],
+      "length": 0.6027,
+      "sigma": 0.0018,
+      "height": 2.3742,
+      "normal": [
+       -0.0069,
+       1.0
+      ],
+      "inlier_rms": 0.0093,
+      "n_eff": 2927,
+      "inferred": false,
+      "coverage": 0.873
+     },
+     {
+      "id": "w2",
+      "a": [
+       4.8458,
+       1.9964
+      ],
+      "b": [
+       4.8409,
+       2.9932
+      ],
+      "length": 0.9968,
+      "sigma": 0.003,
+      "height": 2.3848,
+      "normal": [
+       -1.0,
+       -0.0049
+      ],
+      "inlier_rms": 0.0092,
+      "n_eff": 4915,
+      "inferred": false,
+      "coverage": 0.973
+     },
+     {
+      "id": "w3",
+      "a": [
+       4.8409,
+       2.9932
+      ],
+      "b": [
+       0.0324,
+       2.9918
+      ],
+      "length": 4.8085,
+      "sigma": 0.0144,
+      "height": 2.3991,
+      "normal": [
+       0.0003,
+       -1.0
+      ],
+      "inlier_rms": 0.0062,
+      "n_eff": 23054,
+      "inferred": false,
+      "coverage": 0.965
+     },
+     {
+      "id": "w4",
+      "a": [
+       0.0324,
+       2.9918
+      ],
+      "b": [
+       0.0,
+       0.0344
+      ],
+      "length": 2.9576,
+      "sigma": 0.0089,
+      "height": 2.4019,
+      "normal": [
+       0.9999,
+       -0.011
+      ],
+      "inlier_rms": 0.009,
+      "n_eff": 11348,
+      "inferred": false,
+      "coverage": 0.89
+     },
+     {
+      "id": "w5",
+      "a": [
+       0.0,
+       0.0344
+      ],
+      "b": [
+       4.1761,
+       0.0
+      ],
+      "length": 4.1763,
+      "sigma": 0.0126,
+      "height": 2.3875,
+      "normal": [
+       0.0082,
+       1.0
+      ],
+      "inlier_rms": 0.0053,
+      "n_eff": 14966,
+      "inferred": false,
+      "coverage": 0.711
+     }
+    ],
+    "openings": [
+     {
+      "id": "d0",
+      "type": "door",
+      "wall": "w3",
+      "offset": 0.0835,
+      "width": 0.7677,
+      "sill": 0.0,
+      "height": 2.0737,
+      "sigma": 0.0299,
+      "see_through": 0.0,
+      "state": "closed",
+      "refined": true,
+      "hinge_side": null,
+      "flush": true,
+      "leads_to": "hall1"
+     },
+     {
+      "id": "win0",
+      "type": "window",
+      "wall": "w4",
+      "offset": 0.5886,
+      "width": 1.6943,
+      "sill": 0.9263,
+      "height": 1.009,
+      "sigma": 0.0242,
+      "see_through": 0.0,
+      "state": "closed",
+      "refined": true,
+      "hinge_side": null
+     }
+    ],
+    "obstacles": [
+     {
+      "id": "o0",
+      "label": "unknown",
+      "min": [
+       1.6387,
+       0.0,
+       0.0575
+      ],
+      "max": [
+       3.5264,
+       1.2261,
+       2.3795
+      ],
+      "points": 85651,
+      "footprint": {
+       "center": [
+        2.6251907348632812,
+        1.2127562761306763
+       ],
+       "size": [
+        2.0841901302337646,
+        2.3478915691375732
+       ],
+       "angle_deg": -0.678836464881897
+      }
+     },
+     {
+      "id": "o1",
+      "label": "unknown",
+      "min": [
+       0.0503,
+       0.0,
+       0.071
+      ],
+      "max": [
+       0.884,
+       2.3357,
+       1.7074
+      ],
+      "points": 34559,
+      "footprint": {
+       "center": [
+        0.47306737303733826,
+        1.0918936729431152
+       ],
+       "size": [
+        0.850653886795044,
+        2.0527193546295166
+       ],
+       "angle_deg": -2.103235419781413e-05
+      }
+     },
+     {
+      "id": "o2",
+      "label": "unknown",
+      "min": [
+       0.1752,
+       0.0,
+       1.4709
+      ],
+      "max": [
+       1.4785,
+       0.7952,
+       1.9274
+      ],
+      "points": 7455,
+      "footprint": {
+       "center": [
+        0.828130841255188,
+        1.6901899576187134
+       ],
+       "size": [
+        1.322187066078186,
+        0.48744070529937744
+       ],
+       "angle_deg": -0.4756511449813843
+      }
+     },
+     {
+      "id": "o3",
+      "label": "unknown",
+      "min": [
+       0.9099,
+       0.4244,
+       0.4205
+      ],
+      "max": [
+       1.52,
+       1.0038,
+       0.9473
+      ],
+      "points": 7137,
+      "footprint": {
+       "center": [
+        1.2165656089782715,
+        0.6717957258224487
+       ],
+       "size": [
+        0.502765417098999,
+        0.630332350730896
+       ],
+       "angle_deg": -81.68976593017578
+      }
+     },
+     {
+      "id": "o4",
+      "label": "unknown",
+      "min": [
+       0.0927,
+       0.0,
+       2.1018
+      ],
+      "max": [
+       0.9141,
+       2.3375,
+       2.9665
+      ],
+      "points": 5964,
+      "footprint": {
+       "center": [
+        0.4961276054382324,
+        2.5264337062835693
+       ],
+       "size": [
+        0.881029486656189,
+        0.8547065258026123
+       ],
+       "angle_deg": -89.98743438720703
+      }
+     }
+    ],
+    "coverage": {
+     "score": 0.907,
+     "walls": 0.854,
+     "floor": 0.996,
+     "ceiling": 0.97,
+     "gaps": [
+      {
+       "wall": "w0",
+       "from": 0.0,
+       "to": 0.94,
+       "y_from": 0.04,
+       "y_to": 2.32,
+       "reason": "no points",
+       "area_m2": 1.054
+      },
+      {
+       "wall": "w1",
+       "from": 0.04,
+       "to": 0.14,
+       "y_from": 0.04,
+       "y_to": 0.62,
+       "reason": "low density",
+       "area_m2": 0.038
+      },
+      {
+       "wall": "w1",
+       "from": 0.04,
+       "to": 0.1,
+       "y_from": 0.7,
+       "y_to": 1.26,
+       "reason": "no points",
+       "area_m2": 0.034
+      },
+      {
+       "wall": "w1",
+       "from": 0.52,
+       "to": 0.62,
+       "y_from": 1.0,
+       "y_to": 2.16,
+       "reason": "low density",
+       "area_m2": 0.085
+      },
+      {
+       "wall": "w2",
+       "from": 0.0,
+       "to": 0.06,
+       "y_from": 1.12,
+       "y_to": 2.12,
+       "reason": "low density",
+       "area_m2": 0.049
+      },
+      {
+       "wall": "w3",
+       "from": 3.92,
+       "to": 4.78,
+       "y_from": 2.02,
+       "y_to": 2.36,
+       "reason": "occluded by o4",
+       "area_m2": 0.279
+      },
+      {
+       "wall": "w4",
+       "from": 0.04,
+       "to": 0.14,
+       "y_from": 2.02,
+       "y_to": 2.36,
+       "reason": "occluded by o4",
+       "area_m2": 0.03
+      },
+      {
+       "wall": "w4",
+       "from": 0.84,
+       "to": 2.96,
+       "y_from": 2.16,
+       "y_to": 2.36,
+       "reason": "occluded by o1",
+       "area_m2": 0.174
+      },
+      {
+       "wall": "w4",
+       "from": 1.78,
+       "to": 2.38,
+       "y_from": 0.04,
+       "y_to": 0.38,
+       "reason": "low density",
+       "area_m2": 0.135
+      },
+      {
+       "wall": "w4",
+       "from": 2.6,
+       "to": 2.96,
+       "y_from": 0.04,
+       "y_to": 0.62,
+       "reason": "occluded by o1",
+       "area_m2": 0.189
+      },
+      {
+       "wall": "w5",
+       "from": 0.0,
+       "to": 0.64,
+       "y_from": 0.04,
+       "y_to": 0.7,
+       "reason": "occluded by o1",
+       "area_m2": 0.4
+      },
+      {
+       "wall": "w5",
+       "from": 0.02,
+       "to": 0.22,
+       "y_from": 2.14,
+       "y_to": 2.36,
+       "reason": "occluded by o1",
+       "area_m2": 0.022
+      },
+      {
+       "wall": "w5",
+       "from": 0.34,
+       "to": 0.46,
+       "y_from": 0.78,
+       "y_to": 1.14,
+       "reason": "low density",
+       "area_m2": 0.036
+      },
+      {
+       "wall": "w5",
+       "from": 0.64,
+       "to": 0.88,
+       "y_from": 0.04,
+       "y_to": 0.68,
+       "reason": "occluded by o1",
+       "area_m2": 0.06
+      },
+      {
+       "wall": "w5",
+       "from": 1.6,
+       "to": 3.6,
+       "y_from": 0.04,
+       "y_to": 1.22,
+       "reason": "occluded by o0",
+       "area_m2": 2.231
+      }
+     ]
+    },
+    "qa": [
+     {
+      "severity": "warn",
+      "code": "WALL_GAP",
+      "message": "Wall w0 has no points from 0.00 m to 0.94 m along w0, 0.04-2.32 m high; rescan that region.",
+      "action": "rescan",
+      "target": {
+       "wall": "w0",
+       "from": 0.0,
+       "to": 0.94,
+       "y_from": 0.04,
+       "y_to": 2.32
+      }
+     },
+     {
+      "severity": "warn",
+      "code": "WALL_LOW_DENSITY",
+      "message": "Wall w1 is thinly sampled from 0.04 m to 0.14 m along w1, 0.04-0.62 m high; sweep that patch again slowly from 1-2 m.",
+      "action": "rescan",
+      "target": {
+       "wall": "w1",
+       "from": 0.04,
+       "to": 0.14,
+       "y_from": 0.04,
+       "y_to": 0.62
+      }
+     },
+     {
+      "severity": "info",
+      "code": "WALL_GAP",
+      "message": "Wall w1 has no points from 0.04 m to 0.10 m along w1, 0.70-1.26 m high; rescan that region.",
+      "action": "rescan",
+      "target": {
+       "wall": "w1",
+       "from": 0.04,
+       "to": 0.1,
+       "y_from": 0.7,
+       "y_to": 1.26
+      }
+     },
+     {
+      "severity": "warn",
+      "code": "WALL_LOW_DENSITY",
+      "message": "Wall w1 is thinly sampled from 0.52 m to 0.62 m along w1, 1.00-2.16 m high; sweep that patch again slowly from 1-2 m.",
+      "action": "rescan",
+      "target": {
+       "wall": "w1",
+       "from": 0.52,
+       "to": 0.62,
+       "y_from": 1.0,
+       "y_to": 2.16
+      }
+     },
+     {
+      "severity": "warn",
+      "code": "WALL_LOW_DENSITY",
+      "message": "Wall w2 is thinly sampled from 0.00 m to 0.06 m along w2, 1.12-2.12 m high; sweep that patch again slowly from 1-2 m.",
+      "action": "rescan",
+      "target": {
+       "wall": "w2",
+       "from": 0.0,
+       "to": 0.06,
+       "y_from": 1.12,
+       "y_to": 2.12
+      }
+     },
+     {
+      "severity": "info",
+      "code": "WALL_OCCLUDED",
+      "message": "Wall w3 is hidden behind o4 from 3.92 m to 4.78 m along w3, 2.02-2.36 m high; scan it from the side or accept furniture occlusion.",
+      "action": "ok",
+      "target": {
+       "wall": "w3",
+       "from": 3.92,
+       "to": 4.78,
+       "y_from": 2.02,
+       "y_to": 2.36
+      }
+     },
+     {
+      "severity": "info",
+      "code": "WALL_OCCLUDED",
+      "message": "Wall w4 is hidden behind o4 from 0.04 m to 0.14 m along w4, 2.02-2.36 m high; scan it from the side or accept furniture occlusion.",
+      "action": "ok",
+      "target": {
+       "wall": "w4",
+       "from": 0.04,
+       "to": 0.14,
+       "y_from": 2.02,
+       "y_to": 2.36
+      }
+     },
+     {
+      "severity": "info",
+      "code": "WALL_OCCLUDED",
+      "message": "Wall w4 is hidden behind o1 from 0.84 m to 2.96 m along w4, 2.16-2.36 m high; scan it from the side or accept furniture occlusion.",
+      "action": "ok",
+      "target": {
+       "wall": "w4",
+       "from": 0.84,
+       "to": 2.96,
+       "y_from": 2.16,
+       "y_to": 2.36
+      }
+     },
+     {
+      "severity": "warn",
+      "code": "WALL_LOW_DENSITY",
+      "message": "Wall w4 is thinly sampled from 1.78 m to 2.38 m along w4, 0.04-0.38 m high; sweep that patch again slowly from 1-2 m.",
+      "action": "rescan",
+      "target": {
+       "wall": "w4",
+       "from": 1.78,
+       "to": 2.38,
+       "y_from": 0.04,
+       "y_to": 0.38
+      }
+     },
+     {
+      "severity": "info",
+      "code": "WALL_OCCLUDED",
+      "message": "Wall w4 is hidden behind o1 from 2.60 m to 2.96 m along w4, 0.04-0.62 m high; scan it from the side or accept furniture occlusion.",
+      "action": "ok",
+      "target": {
+       "wall": "w4",
+       "from": 2.6,
+       "to": 2.96,
+       "y_from": 0.04,
+       "y_to": 0.62
+      }
+     },
+     {
+      "severity": "info",
+      "code": "WALL_OCCLUDED",
+      "message": "Wall w5 is hidden behind o1 from 0.00 m to 0.64 m along w5, 0.04-0.70 m high; scan it from the side or accept furniture occlusion.",
+      "action": "ok",
+      "target": {
+       "wall": "w5",
+       "from": 0.0,
+       "to": 0.64,
+       "y_from": 0.04,
+       "y_to": 0.7
+      }
+     },
+     {
+      "severity": "info",
+      "code": "WALL_OCCLUDED",
+      "message": "Wall w5 is hidden behind o1 from 0.02 m to 0.22 m along w5, 2.14-2.36 m high; scan it from the side or accept furniture occlusion.",
+      "action": "ok",
+      "target": {
+       "wall": "w5",
+       "from": 0.02,
+       "to": 0.22,
+       "y_from": 2.14,
+       "y_to": 2.36
+      }
+     },
+     {
+      "severity": "warn",
+      "code": "WALL_LOW_DENSITY",
+      "message": "Wall w5 is thinly sampled from 0.34 m to 0.46 m along w5, 0.78-1.14 m high; sweep that patch again slowly from 1-2 m.",
+      "action": "rescan",
+      "target": {
+       "wall": "w5",
+       "from": 0.34,
+       "to": 0.46,
+       "y_from": 0.78,
+       "y_to": 1.14
+      }
+     },
+     {
+      "severity": "info",
+      "code": "WALL_OCCLUDED",
+      "message": "Wall w5 is hidden behind o1 from 0.64 m to 0.88 m along w5, 0.04-0.68 m high; scan it from the side or accept furniture occlusion.",
+      "action": "ok",
+      "target": {
+       "wall": "w5",
+       "from": 0.64,
+       "to": 0.88,
+       "y_from": 0.04,
+       "y_to": 0.68
+      }
+     },
+     {
+      "severity": "info",
+      "code": "WALL_OCCLUDED",
+      "message": "Wall w5 is hidden behind o0 from 1.60 m to 3.60 m along w5, 0.04-1.22 m high; scan it from the side or accept furniture occlusion.",
+      "action": "ok",
+      "target": {
+       "wall": "w5",
+       "from": 1.6,
+       "to": 3.6,
+       "y_from": 0.04,
+       "y_to": 1.22
+      }
+     }
+    ],
+    "gravity": {
+     "candidates": [
+      {
+       "up": [
+        -0.0003,
+        1.0,
+        0.0055
+       ],
+       "score": 6.343,
+       "skew": 0.049,
+       "skew_h": 0.22,
+       "density": 0.005,
+       "perp": 1.0,
+       "axis_prior": 1.5,
+       "span": 2.4
+      },
+      {
+       "up": [
+        0.0003,
+        -1.0,
+        -0.0055
+       ],
+       "score": 2.844,
+       "skew": -0.051,
+       "skew_h": -0.217,
+       "density": 0.024,
+       "perp": 1.0,
+       "axis_prior": 1.0,
+       "span": 2.4
+      },
+      {
+       "up": [
+        0.8905,
+        -0.007,
+        -0.455
+       ],
+       "score": 1.958,
+       "skew": 0.126,
+       "skew_h": 0.028,
+       "density": 0.789,
+       "perp": 1.0,
+       "axis_prior": 0.0,
+       "span": 9.0
+      },
+      {
+       "up": [
+        0.4429,
+        -0.0024,
+        0.8966
+       ],
+       "score": 1.499,
+       "skew": 0.056,
+       "skew_h": -0.003,
+       "density": 0.792,
+       "perp": 1.0,
+       "axis_prior": 0.0,
+       "span": 6.0
+      }
+     ],
+     "margin": 3.499,
+     "floor_rms": 0.0059
+    },
+    "timings_s": {
+     "load": 5.294,
+     "clean": 2.28,
+     "normals": 0.194,
+     "gravity_floor": 0.321,
+     "segment": 0.106,
+     "walls": 1.623,
+     "obstacles": 0.178,
+     "openings": 0.305,
+     "qa": 0.028,
+     "total": 12.412
+    },
+    "id": "room1",
+    "name": "Main room",
+    "segmentation": {
+     "interior_area_m2": 9.44,
+     "bounded": 0.891,
+     "half_width_p95": 1.063,
+     "kind": "room",
+     "relevel_deg": 0.971
+    },
+    "house": "house.json"
+   }
+  },
+  {
+   "id": "hall1",
+   "name": "Hallway",
+   "transform": {
+    "x": 0,
+    "z": 0,
+    "rot": 0
+   },
+   "room": {
+    "version": 1,
+    "generator": "roomtwin 0.1.0 / OpenCV 5.0.0",
+    "source": {
+     "type": "pointcloud",
+     "file": "scan.ply",
+     "loader": "cv2.loadPointCloud",
+     "points": 2019282
+    },
+    "frame": "metres; y up, floor at y = 0; polygon counter-clockwise in (x, z); wall normals point into the room",
+    "transform": [
+     [
+      0.8963,
+      0.0025,
+      -0.4435,
+      4.442
+     ],
+     [
+      0.0023,
+      0.9999,
+      0.0104,
+      1.1173
+     ],
+     [
+      0.4435,
+      -0.0103,
+      0.8962,
+      3.0876
+     ],
+     [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+     ]
+    ],
+    "floor": {
+     "polygon": [
+      [
+       4.8672,
+       3.0738
+      ],
+      [
+       4.905,
+       6.0188
+      ],
+      [
+       3.9556,
+       6.0289
+      ],
+      [
+       3.9212,
+       4.0535
+      ],
+      [
+       2.14,
+       4.0756
+      ],
+      [
+       2.1365,
+       3.1283
+      ]
+     ],
+     "area_m2": 4.505
+    },
+    "ceiling_height": {
+     "value": 2.3887,
+     "sigma": 0.0072,
+     "observed": true
+    },
+    "walls": [
+     {
+      "id": "w0",
+      "a": [
+       4.8672,
+       3.0738
+      ],
+      "b": [
+       4.905,
+       6.0188
+      ],
+      "length": 2.9452,
+      "sigma": 0.0089,
+      "height": 2.3919,
+      "normal": [
+       -0.9999,
+       0.0128
+      ],
+      "inlier_rms": 0.0072,
+      "n_eff": 8162,
+      "inferred": false,
+      "coverage": 0.722
+     },
+     {
+      "id": "w1",
+      "a": [
+       4.905,
+       6.0188
+      ],
+      "b": [
+       3.9556,
+       6.0289
+      ],
+      "length": 0.9494,
+      "sigma": 0.0029,
+      "height": 2.3985,
+      "normal": [
+       -0.0107,
+       -0.9999
+      ],
+      "inlier_rms": 0.0087,
+      "n_eff": 2027,
+      "inferred": false,
+      "coverage": 0.389
+     },
+     {
+      "id": "w2",
+      "a": [
+       3.9556,
+       6.0289
+      ],
+      "b": [
+       3.9212,
+       4.0535
+      ],
+      "length": 1.9757,
+      "sigma": 0.0059,
+      "height": 2.3943,
+      "normal": [
+       0.9998,
+       -0.0174
+      ],
+      "inlier_rms": 0.0113,
+      "n_eff": 8444,
+      "inferred": false,
+      "coverage": 0.82
+     },
+     {
+      "id": "w3",
+      "a": [
+       3.9212,
+       4.0535
+      ],
+      "b": [
+       2.14,
+       4.0756
+      ],
+      "length": 1.7814,
+      "sigma": 0.0054,
+      "height": 2.383,
+      "normal": [
+       -0.0124,
+       -0.9999
+      ],
+      "inlier_rms": 0.0052,
+      "n_eff": 1725,
+      "inferred": false,
+      "coverage": 0.202
+     },
+     {
+      "id": "w4",
+      "a": [
+       2.14,
+       4.0756
+      ],
+      "b": [
+       2.1365,
+       3.1283
+      ],
+      "length": 0.9473,
+      "sigma": 0.0029,
+      "height": 2.3807,
+      "normal": [
+       1.0,
+       -0.0037
+      ],
+      "inlier_rms": 0.011,
+      "n_eff": 877,
+      "inferred": false,
+      "coverage": 0.179
+     },
+     {
+      "id": "w5",
+      "a": [
+       2.1365,
+       3.1283
+      ],
+      "b": [
+       4.8672,
+       3.0738
+      ],
+      "length": 2.7312,
+      "sigma": 0.0082,
+      "height": 2.3825,
+      "normal": [
+       0.0199,
+       0.9998
+      ],
+      "inlier_rms": 0.02,
+      "n_eff": 5473,
+      "inferred": false,
+      "coverage": 0.55
+     }
+    ],
+    "openings": [
+     {
+      "id": "d0",
+      "type": "door",
+      "wall": "w0",
+      "offset": 0.86,
+      "width": 0.9319,
+      "sill": 0.0,
+      "height": 2.2103,
+      "sigma": 0.0117,
+      "see_through": 0.407,
+      "state": "open",
+      "refined": true,
+      "hinge_side": null
+     },
+     {
+      "id": "xrd0",
+      "type": "door",
+      "wall": "w5",
+      "offset": 1.8555,
+      "width": 0.7675,
+      "sill": 0.0,
+      "height": 2.0737,
+      "sigma": 0.036,
+      "see_through": 0.0,
+      "state": "closed",
+      "refined": false,
+      "hinge_side": null,
+      "inferred": true,
+      "inferred_from": "room1/d0",
+      "leads_to": "room1"
+     }
+    ],
+    "obstacles": [
+     {
+      "id": "o0",
+      "label": "unknown",
+      "min": [
+       3.994,
+       0.0,
+       5.8875
+      ],
+      "max": [
+       4.8779,
+       2.324,
+       6.0008
+      ],
+      "points": 4250,
+      "footprint": {
+       "center": [
+        4.436012268066406,
+        5.938419818878174
+       ],
+       "size": [
+        0.12667475640773773,
+        0.8861293792724609
+       ],
+       "angle_deg": -89.9918212890625
+      }
+     }
+    ],
+    "coverage": {
+     "score": 0.669,
+     "walls": 0.542,
+     "floor": 0.787,
+     "ceiling": 0.982,
+     "gaps": [
+      {
+       "wall": "w0",
+       "from": 0.0,
+       "to": 0.08,
+       "y_from": 0.04,
+       "y_to": 2.26,
+       "reason": "no points",
+       "area_m2": 0.153
+      },
+      {
+       "wall": "w0",
+       "from": 1.792,
+       "to": 2.96,
+       "y_from": 0.04,
+       "y_to": 2.36,
+       "reason": "low density",
+       "area_m2": 1.745
+      },
+      {
+       "wall": "w1",
+       "from": 0.0,
+       "to": 0.96,
+       "y_from": 0.04,
+       "y_to": 2.36,
+       "reason": "low density",
+       "area_m2": 1.314
+      },
+      {
+       "wall": "w2",
+       "from": 0.0,
+       "to": 0.68,
+       "y_from": 0.04,
+       "y_to": 2.14,
+       "reason": "no points",
+       "area_m2": 0.36
+      },
+      {
+       "wall": "w2",
+       "from": 0.22,
+       "to": 0.44,
+       "y_from": 0.08,
+       "y_to": 0.52,
+       "reason": "low density",
+       "area_m2": 0.062
+      },
+      {
+       "wall": "w2",
+       "from": 0.24,
+       "to": 0.4,
+       "y_from": 0.58,
+       "y_to": 0.78,
+       "reason": "low density",
+       "area_m2": 0.023
+      },
+      {
+       "wall": "w2",
+       "from": 0.68,
+       "to": 1.2,
+       "y_from": 0.08,
+       "y_to": 0.58,
+       "reason": "low density",
+       "area_m2": 0.125
+      },
+      {
+       "wall": "w2",
+       "from": 1.88,
+       "to": 1.98,
+       "y_from": 0.08,
+       "y_to": 0.78,
+       "reason": "no points",
+       "area_m2": 0.032
+      },
+      {
+       "wall": "w3",
+       "from": 0.0,
+       "to": 1.8,
+       "y_from": 0.04,
+       "y_to": 2.08,
+       "reason": "no points",
+       "area_m2": 3.204
+      },
+      {
+       "wall": "w3",
+       "from": 1.02,
+       "to": 1.16,
+       "y_from": 2.06,
+       "y_to": 2.32,
+       "reason": "low density",
+       "area_m2": 0.028
+      },
+      {
+       "wall": "w3",
+       "from": 1.36,
+       "to": 1.76,
+       "y_from": 2.04,
+       "y_to": 2.36,
+       "reason": "low density",
+       "area_m2": 0.09
+      },
+      {
+       "wall": "w4",
+       "from": 0.0,
+       "to": 0.96,
+       "y_from": 0.04,
+       "y_to": 2.04,
+       "reason": "no points",
+       "area_m2": 1.822
+      },
+      {
+       "wall": "w5",
+       "from": 0.0,
+       "to": 1.32,
+       "y_from": 0.04,
+       "y_to": 1.74,
+       "reason": "no points",
+       "area_m2": 1.99
+      },
+      {
+       "wall": "w5",
+       "from": 1.16,
+       "to": 1.38,
+       "y_from": 0.04,
+       "y_to": 0.32,
+       "reason": "low density",
+       "area_m2": 0.033
+      },
+      {
+       "wall": "w5",
+       "from": 1.74,
+       "to": 2.42,
+       "y_from": 0.04,
+       "y_to": 1.94,
+       "reason": "low density",
+       "area_m2": 0.744
+      },
+      {
+       "wall": "w5",
+       "from": 2.68,
+       "to": 2.74,
+       "y_from": 0.04,
+       "y_to": 1.7,
+       "reason": "low density",
+       "area_m2": 0.074
+      }
+     ]
+    },
+    "qa": [
+     {
+      "severity": "warn",
+      "code": "WALL_GAP",
+      "message": "Wall w0 has no points from 0.00 m to 0.08 m along w0, 0.04-2.26 m high; rescan that region.",
+      "action": "rescan",
+      "target": {
+       "wall": "w0",
+       "from": 0.0,
+       "to": 0.08,
+       "y_from": 0.04,
+       "y_to": 2.26
+      }
+     },
+     {
+      "severity": "warn",
+      "code": "WALL_LOW_DENSITY",
+      "message": "Wall w0 is thinly sampled from 1.79 m to 2.96 m along w0, 0.04-2.36 m high; sweep that patch again slowly from 1-2 m.",
+      "action": "rescan",
+      "target": {
+       "wall": "w0",
+       "from": 1.792,
+       "to": 2.96,
+       "y_from": 0.04,
+       "y_to": 2.36
+      }
+     },
+     {
+      "severity": "warn",
+      "code": "WALL_LOW_DENSITY",
+      "message": "Wall w1 is thinly sampled from 0.00 m to 0.96 m along w1, 0.04-2.36 m high; sweep that patch again slowly from 1-2 m.",
+      "action": "rescan",
+      "target": {
+       "wall": "w1",
+       "from": 0.0,
+       "to": 0.96,
+       "y_from": 0.04,
+       "y_to": 2.36
+      }
+     },
+     {
+      "severity": "warn",
+      "code": "WALL_LOW_COVERAGE",
+      "message": "Only 39% of wall w1 was seen; sweep it top to bottom.",
+      "action": "rescan",
+      "target": {
+       "wall": "w1"
+      }
+     },
+     {
+      "severity": "warn",
+      "code": "WALL_GAP",
+      "message": "Wall w2 has no points from 0.00 m to 0.68 m along w2, 0.04-2.14 m high; rescan that region.",
+      "action": "rescan",
+      "target": {
+       "wall": "w2",
+       "from": 0.0,
+       "to": 0.68,
+       "y_from": 0.04,
+       "y_to": 2.14
+      }
+     },
+     {
+      "severity": "warn",
+      "code": "WALL_LOW_DENSITY",
+      "message": "Wall w2 is thinly sampled from 0.22 m to 0.44 m along w2, 0.08-0.52 m high; sweep that patch again slowly from 1-2 m.",
+      "action": "rescan",
+      "target": {
+       "wall": "w2",
+       "from": 0.22,
+       "to": 0.44,
+       "y_from": 0.08,
+       "y_to": 0.52
+      }
+     },
+     {
+      "severity": "warn",
+      "code": "WALL_LOW_DENSITY",
+      "message": "Wall w2 is thinly sampled from 0.24 m to 0.40 m along w2, 0.58-0.78 m high; sweep that patch again slowly from 1-2 m.",
+      "action": "rescan",
+      "target": {
+       "wall": "w2",
+       "from": 0.24,
+       "to": 0.4,
+       "y_from": 0.58,
+       "y_to": 0.78
+      }
+     },
+     {
+      "severity": "warn",
+      "code": "WALL_LOW_DENSITY",
+      "message": "Wall w2 is thinly sampled from 0.68 m to 1.20 m along w2, 0.08-0.58 m high; sweep that patch again slowly from 1-2 m.",
+      "action": "rescan",
+      "target": {
+       "wall": "w2",
+       "from": 0.68,
+       "to": 1.2,
+       "y_from": 0.08,
+       "y_to": 0.58
+      }
+     },
+     {
+      "severity": "info",
+      "code": "WALL_GAP",
+      "message": "Wall w2 has no points from 1.88 m to 1.98 m along w2, 0.08-0.78 m high; rescan that region.",
+      "action": "rescan",
+      "target": {
+       "wall": "w2",
+       "from": 1.88,
+       "to": 1.98,
+       "y_from": 0.08,
+       "y_to": 0.78
+      }
+     },
+     {
+      "severity": "warn",
+      "code": "WALL_GAP",
+      "message": "Wall w3 has no points from 0.00 m to 1.80 m along w3, 0.04-2.08 m high; rescan that region.",
+      "action": "rescan",
+      "target": {
+       "wall": "w3",
+       "from": 0.0,
+       "to": 1.8,
+       "y_from": 0.04,
+       "y_to": 2.08
+      }
+     },
+     {
+      "severity": "warn",
+      "code": "WALL_LOW_DENSITY",
+      "message": "Wall w3 is thinly sampled from 1.02 m to 1.16 m along w3, 2.06-2.32 m high; sweep that patch again slowly from 1-2 m.",
+      "action": "rescan",
+      "target": {
+       "wall": "w3",
+       "from": 1.02,
+       "to": 1.16,
+       "y_from": 2.06,
+       "y_to": 2.32
+      }
+     },
+     {
+      "severity": "warn",
+      "code": "WALL_LOW_DENSITY",
+      "message": "Wall w3 is thinly sampled from 1.36 m to 1.76 m along w3, 2.04-2.36 m high; sweep that patch again slowly from 1-2 m.",
+      "action": "rescan",
+      "target": {
+       "wall": "w3",
+       "from": 1.36,
+       "to": 1.76,
+       "y_from": 2.04,
+       "y_to": 2.36
+      }
+     },
+     {
+      "severity": "warn",
+      "code": "WALL_LOW_COVERAGE",
+      "message": "Only 20% of wall w3 was seen; sweep it top to bottom.",
+      "action": "rescan",
+      "target": {
+       "wall": "w3"
+      }
+     },
+     {
+      "severity": "warn",
+      "code": "WALL_GAP",
+      "message": "Wall w4 has no points from 0.00 m to 0.96 m along w4, 0.04-2.04 m high; rescan that region.",
+      "action": "rescan",
+      "target": {
+       "wall": "w4",
+       "from": 0.0,
+       "to": 0.96,
+       "y_from": 0.04,
+       "y_to": 2.04
+      }
+     },
+     {
+      "severity": "warn",
+      "code": "WALL_LOW_COVERAGE",
+      "message": "Only 18% of wall w4 was seen; sweep it top to bottom.",
+      "action": "rescan",
+      "target": {
+       "wall": "w4"
+      }
+     },
+     {
+      "severity": "warn",
+      "code": "WALL_GAP",
+      "message": "Wall w5 has no points from 0.00 m to 1.32 m along w5, 0.04-1.74 m high; rescan that region.",
+      "action": "rescan",
+      "target": {
+       "wall": "w5",
+       "from": 0.0,
+       "to": 1.32,
+       "y_from": 0.04,
+       "y_to": 1.74
+      }
+     },
+     {
+      "severity": "warn",
+      "code": "WALL_LOW_DENSITY",
+      "message": "Wall w5 is thinly sampled from 1.16 m to 1.38 m along w5, 0.04-0.32 m high; sweep that patch again slowly from 1-2 m.",
+      "action": "rescan",
+      "target": {
+       "wall": "w5",
+       "from": 1.16,
+       "to": 1.38,
+       "y_from": 0.04,
+       "y_to": 0.32
+      }
+     },
+     {
+      "severity": "warn",
+      "code": "WALL_LOW_DENSITY",
+      "message": "Wall w5 is thinly sampled from 1.74 m to 2.42 m along w5, 0.04-1.94 m high; sweep that patch again slowly from 1-2 m.",
+      "action": "rescan",
+      "target": {
+       "wall": "w5",
+       "from": 1.74,
+       "to": 2.42,
+       "y_from": 0.04,
+       "y_to": 1.94
+      }
+     },
+     {
+      "severity": "warn",
+      "code": "WALL_LOW_DENSITY",
+      "message": "Wall w5 is thinly sampled from 2.68 m to 2.74 m along w5, 0.04-1.70 m high; sweep that patch again slowly from 1-2 m.",
+      "action": "rescan",
+      "target": {
+       "wall": "w5",
+       "from": 2.68,
+       "to": 2.74,
+       "y_from": 0.04,
+       "y_to": 1.7
+      }
+     },
+     {
+      "severity": "warn",
+      "code": "WALL_LOW_COVERAGE",
+      "message": "Only 55% of wall w5 was seen; sweep it top to bottom.",
+      "action": "rescan",
+      "target": {
+       "wall": "w5"
+      }
+     },
+     {
+      "severity": "warn",
+      "code": "CORNER_UNSEEN",
+      "message": "The corner between w3 and w4 (x=2.14, z=4.08) is barely seen (12% of the last 30 cm); point the phone into that corner and rescan it.",
+      "action": "rescan",
+      "target": {
+       "corner": [
+        "w3",
+        "w4"
+       ],
+       "xz": [
+        2.14,
+        4.08
+       ]
+      }
+     }
+    ],
+    "gravity": {
+     "candidates": [
+      {
+       "up": [
+        -0.0003,
+        1.0,
+        0.0055
+       ],
+       "score": 6.343,
+       "skew": 0.049,
+       "skew_h": 0.22,
+       "density": 0.005,
+       "perp": 1.0,
+       "axis_prior": 1.5,
+       "span": 2.4
+      },
+      {
+       "up": [
+        0.0003,
+        -1.0,
+        -0.0055
+       ],
+       "score": 2.844,
+       "skew": -0.051,
+       "skew_h": -0.217,
+       "density": 0.024,
+       "perp": 1.0,
+       "axis_prior": 1.0,
+       "span": 2.4
+      },
+      {
+       "up": [
+        0.8905,
+        -0.007,
+        -0.455
+       ],
+       "score": 1.958,
+       "skew": 0.126,
+       "skew_h": 0.028,
+       "density": 0.789,
+       "perp": 1.0,
+       "axis_prior": 0.0,
+       "span": 9.0
+      },
+      {
+       "up": [
+        0.4429,
+        -0.0024,
+        0.8966
+       ],
+       "score": 1.499,
+       "skew": 0.056,
+       "skew_h": -0.003,
+       "density": 0.792,
+       "perp": 1.0,
+       "axis_prior": 0.0,
+       "span": 6.0
+      }
+     ],
+     "margin": 3.499,
+     "floor_rms": 0.0059
+    },
+    "timings_s": {
+     "load": 5.294,
+     "clean": 2.28,
+     "normals": 0.194,
+     "gravity_floor": 0.321,
+     "segment": 0.106,
+     "walls": 1.31,
+     "obstacles": 0.114,
+     "openings": 0.27,
+     "qa": 0.021
+    },
+    "id": "hall1",
+    "name": "Hallway",
+    "segmentation": {
+     "interior_area_m2": 2.98,
+     "bounded": 0.861,
+     "half_width_p95": 0.348,
+     "kind": "hallway",
+     "relevel_deg": 0.741
+    }
+   }
+  }
+ ],
+ "doorways": [
+  {
+   "a": {
+    "room": "room1",
+    "opening": "d0"
+   },
+   "b": {
+    "room": "hall1",
+    "opening": "xrd0"
+   },
+   "inferred_side": "b"
+  }
+ ],
+ "segmentation": {
+  "cell_m": 0.02,
+  "regions": [
+   {
+    "label": 1,
+    "area": 6.725,
+    "bounded": 0.211,
+    "half_width": 0.552,
+    "valid": false
+   },
+   {
+    "label": 2,
+    "area": 9.439,
+    "bounded": 0.891,
+    "half_width": 1.063,
+    "valid": true
+   },
+   {
+    "label": 3,
+    "area": 2.982,
+    "bounded": 0.861,
+    "half_width": 0.348,
+    "valid": true
+   }
+  ]
+ },
+ "entry": {
+  "room": "hall1",
+  "opening": "d0"
+ }
+}

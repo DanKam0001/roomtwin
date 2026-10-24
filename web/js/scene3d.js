@@ -9,7 +9,9 @@ import { WalkController } from './walk.js';
 import { proxiedImage } from './api.js';
 
 const WALL_T = 0.09;
-const COL = { wall: 0xe6e3dd, frame: 0xf3f1ec, leaf: 0xb8a68a, floor: 0xffffff, ceiling: 0xd9d6d0, obstacle: 0x6b717a, accent: 0x63d2be, bad: 0xf07171 };
+const COL = { wall: 0xe6e3dd, frame: 0xf3f1ec, leaf: 0xb8a68a, floor: 0xffffff, ceiling: 0xd9d6d0, obstacle: 0xc9c4bb, accent: 0x63d2be, bad: 0xf07171 };
+// Label priorities: higher wins when two would overlap on screen.
+const LABEL_PRIO = { overlay: 100, item: 80, room: 70, wall: 50, ceiling: 30 };
 
 function yawFromDir(dir) { return Math.atan2(-dir[1], dir[0]); }
 
@@ -55,7 +57,7 @@ export class Scene3D {
     r.toneMappingExposure = 1.05;
     container.appendChild(r.domElement);
     this.labels = new CSS2DRenderer();
-    Object.assign(this.labels.domElement.style, { position: 'absolute', inset: '0', pointerEvents: 'none' });
+    Object.assign(this.labels.domElement.style, { position: 'absolute', inset: '0', pointerEvents: 'none', overflow: 'hidden' });
     container.appendChild(this.labels.domElement);
 
     this.scene = new THREE.Scene();
@@ -99,6 +101,11 @@ export class Scene3D {
     this.controls.minDistance = 0.6;
     this.controls.maxDistance = 60;
     this.controls.screenSpacePanning = true;
+    // the reset-view button only shows once the camera has been moved by hand
+    this.userMoved = false;
+    this.controls.addEventListener('start', () => { if (!this.userMoved) { this.userMoved = true; this.hooks.onViewChange?.(); } });
+    this.insetKey = '';
+    this.frame = 0;
 
     this.walk = new WalkController(this.camera, dom, hooks.walkUi);
     this.clock = new THREE.Clock();
@@ -112,8 +119,31 @@ export class Scene3D {
     this.renderer.domElement.style.width = '100%';
     this.renderer.domElement.style.height = '100%';
     this.labels.setSize(w, h);
-    this.camera.aspect = w / h;
+    this.W = w; this.H = h;
+    this.insetKey = '';
+    this.applyInsets();
+  }
+
+  // On phones the bottom sheet (and the toggles at the top) cover part of the canvas.
+  // Shift the projection centre into the uncovered band so the house is framed there.
+  applyInsets() {
+    const ins = this.hooks.insets?.() || { top: 0, bottom: 0 };
+    const W = this.W || this.container.clientWidth || 1, H = this.H || this.container.clientHeight || 1;
+    const top = Math.max(0, Math.min(H * 0.4, ins.top || 0)), bottom = Math.max(0, Math.min(H * 0.7, ins.bottom || 0));
+    const key = `${W}|${H}|${Math.round(top)}|${Math.round(bottom)}`;
+    if (key === this.insetKey) return false;
+    this.insetKey = key;
+    this.inset = { top, bottom };
+    const V = Math.max(80, H - top - bottom);
+    if (top || bottom) {
+      this.camera.aspect = W / V;
+      this.camera.setViewOffset(W, V, 0, -top, W, H);
+    } else {
+      this.camera.aspect = W / H;
+      this.camera.clearViewOffset();
+    }
     this.camera.updateProjectionMatrix();
+    return true;
   }
 
   setVisible(v) {
@@ -219,7 +249,7 @@ export class Scene3D {
         t = op.offset + op.width;
       }
       box(t, L, 0, H);
-      g.userData = { normalIn: wall.normalIn, mid: [(wall.a[0] + wall.b[0]) / 2, (wall.a[1] + wall.b[1]) / 2], mat };
+      g.userData = { normalIn: wall.normalIn, mid: [(wall.a[0] + wall.b[0]) / 2, (wall.a[1] + wall.b[1]) / 2], mat, length: wall.geomLength };
       this.roomGroup.add(g);
       this.walls.push(g);
       const sig = wall.sigma != null ? ` <small>±${Math.max(1, Math.round(wall.sigma * 100))} cm</small>` : '';
@@ -227,6 +257,7 @@ export class Scene3D {
       const midp = g.userData.mid;
       wl.position.set(midp[0] + wall.normalIn[0] * 0.15, H + 0.12, midp[1] + wall.normalIn[1] * 0.15);
       wl.userData.kind = 'wall';
+      wl.userData.len = wall.geomLength;
       this.roomGroup.add(wl);
       this.wallLabels.push(wl);
     }
@@ -239,14 +270,20 @@ export class Scene3D {
     });
     this.wallLabels.push(...ceilLbl);
 
+    // furniture that was already there when the room was scanned: soft, see-through
+    // boxes with rounded-looking light edges, so it never reads as something you placed
+    const obstacleMat = new THREE.MeshStandardMaterial({ color: COL.obstacle, roughness: 1, transparent: true, opacity: 0.38, depthWrite: false });
+    const obstacleEdge = new THREE.LineBasicMaterial({ color: 0xf2efe9, transparent: true, opacity: 0.55 });
     for (const o of world.obstacles) {
       const h = Math.max(0.02, o.ymax - o.ymin);
       const geo = new THREE.BoxGeometry(o.hx * 2, h, o.hz * 2);
-      const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: COL.obstacle, roughness: 0.8 }));
+      const m = new THREE.Mesh(geo, obstacleMat);
       m.position.set(o.cx, o.ymin + h / 2, o.cz);
       m.rotation.y = o.yaw;
-      m.castShadow = m.receiveShadow = true;
-      const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: 0x9aa1aa, transparent: true, opacity: 0.5 }));
+      m.renderOrder = 1;
+      m.receiveShadow = true;
+      m.userData.obstacle = true;
+      const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), obstacleEdge);
       m.add(edges);
       this.roomGroup.add(m);
     }
@@ -293,14 +330,41 @@ export class Scene3D {
     }
   }
 
+  // Dollhouse view of the whole home: looking along its long side on a portrait
+  // screen (across it on a landscape one), tightened until every corner just fits.
   fit() {
     if (!this.world) return;
+    this.applyInsets();
     const [x0, z0, x1, z1] = this.world.bounds;
+    const H = this.world.maxCeiling || 2.4;
     const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
-    const size = Math.max(x1 - x0, z1 - z0, 2);
-    this.controls.target.set(cx, 0.6, cz);
-    this.camera.position.set(cx + size * 0.45, size * 0.95 + 1.5, cz + size * 0.85 + 0.5);
+    const longZ = (z1 - z0) >= (x1 - x0);
+    const portrait = this.camera.aspect < 1;
+    const alongZ = portrait ? longZ : !longZ; // camera looks along z (from +z)
+    const hz = alongZ ? [0.42, 1] : [1, 0.42];
+    const hl = Math.hypot(hz[0], hz[1]);
+    const el = portrait ? 0.98 : 0.86; // elevation (radians)
+    const dir = new THREE.Vector3((hz[0] / hl) * Math.cos(el), Math.sin(el), (hz[1] / hl) * Math.cos(el));
+    const target = new THREE.Vector3(cx, H * 0.28, cz);
+    const corners = [];
+    for (const x of [x0, x1]) for (const y of [0, H]) for (const z of [z0, z1]) corners.push(new THREE.Vector3(x, y, z));
+    let d = Math.max(x1 - x0, z1 - z0, 2) * 1.6;
+    const v = new THREE.Vector3();
+    for (let i = 0; i < 8; i++) {
+      this.camera.position.copy(target).addScaledVector(dir, d);
+      this.camera.lookAt(target);
+      this.camera.updateMatrixWorld(true);
+      let m = 0;
+      for (const c of corners) { v.copy(c).project(this.camera); m = Math.max(m, Math.abs(v.x), Math.abs(v.y)); }
+      const k = m / (portrait ? 0.9 : 0.86);
+      if (Math.abs(k - 1) < 0.01) break;
+      d = Math.min(80, Math.max(1.2, d * (1 + (k - 1) * 0.9)));
+    }
+    this.controls.target.copy(target);
     this.controls.update();
+    this.savedOrbit = null;
+    this.userMoved = false;
+    this.hooks.onViewChange?.();
   }
 
   setOptions({ ceiling, labels, mesh }) {
@@ -313,7 +377,53 @@ export class Scene3D {
 
   refreshLabelVisibility() {
     const walk = this.mode === 'walk';
-    for (const l of this.wallLabels) l.visible = this.showLabels && !walk;
+    for (const l of this.wallLabels) { l.userData.want = this.showLabels && !walk; l.visible = l.userData.want; }
+    this.frame = 0; // re-cull on the next frame
+  }
+
+  // Keep labels readable: only inside the uncovered part of the canvas, not behind
+  // walls, and never stacked on top of each other (higher priority wins).
+  cullLabels() {
+    const W = this.W || 1, H = this.H || 1;
+    const ins = this.inset || { top: 0, bottom: 0 };
+    const rect = { x0: 2, y0: ins.top + 2, x1: W - 2, y1: H - ins.bottom - 2 };
+    const list = [];
+    const add = (l, kind, extra = 0) => { if (l.userData.want !== false) list.push({ l, kind, prio: (LABEL_PRIO[kind] || 10) + extra }); else l.visible = false; };
+    for (const l of this.wallLabels) add(l, l.userData.kind, l.userData.kind === 'wall' ? Math.min(9, l.userData.len || 0) : 0);
+    for (const obj of this.itemObjs.values()) add(obj.label, 'item', obj.selected ? 15 : obj.bad ? 8 : 0);
+    this.overlayGroup.traverse((o) => { if (o.isCSS2DObject) add(o, 'overlay'); });
+    list.sort((a, b) => b.prio - a.prio);
+    const occluders = [];
+    for (const g of this.walls) if (g.userData.mat.opacity > 0.5) for (const m of g.children) if (m.material === g.userData.mat) occluders.push(m);
+    const placed = [];
+    const p = new THREE.Vector3(), cam = this.camera.position;
+    for (const it of list) {
+      const { l } = it;
+      l.getWorldPosition(p);
+      const dist = p.distanceTo(cam);
+      p.project(this.camera);
+      let ok = p.z > -1 && p.z < 1;
+      const sx = (p.x + 1) / 2 * W, sy = (1 - p.y) / 2 * H;
+      const el = l.element;
+      const key = el.textContent;
+      if (l.userData.sizeKey !== key || !l.userData.w) {
+        const w = el.offsetWidth, h = el.offsetHeight;
+        if (w) { l.userData.w = w; l.userData.h = h; l.userData.sizeKey = key; } else { l.userData.w = key.length * 7 + 16; l.userData.h = 20; }
+      }
+      const hw = l.userData.w / 2 + 2, hh = l.userData.h / 2 + 1;
+      const b = { x0: sx - hw, y0: sy - hh, x1: sx + hw, y1: sy + hh };
+      if (ok) ok = b.x0 >= rect.x0 && b.x1 <= rect.x1 && b.y0 >= rect.y0 && b.y1 <= rect.y1;
+      if (ok && it.kind !== 'overlay' && occluders.length) {
+        const dirv = new THREE.Vector3().copy(l.getWorldPosition(new THREE.Vector3())).sub(cam).normalize();
+        this.raycaster.set(cam, dirv);
+        this.raycaster.far = Math.max(0, dist - 0.12);
+        if (this.raycaster.intersectObjects(occluders, false).length) ok = false;
+        this.raycaster.far = Infinity;
+      }
+      if (ok && placed.some((o) => b.x0 < o.x1 && b.x1 > o.x0 && b.y0 < o.y1 && b.y1 > o.y0)) ok = false;
+      if (ok) placed.push(b);
+      l.visible = ok;
+    }
   }
 
   // ---------------- items ----------------
@@ -333,9 +443,12 @@ export class Scene3D {
       obj.group.position.set(it.pose.x, 0, it.pose.z);
       obj.group.rotation.y = it.pose.yaw;
       obj.group.visible = !hidden.has(it.id);
-      obj.label.visible = obj.group.visible;
+      obj.label.userData.want = obj.group.visible && this.mode !== 'walk';
+      obj.label.visible = obj.label.userData.want;
       const bad = status[it.id] && !status[it.id].ok;
       const sel = it.id === selectedId;
+      obj.selected = sel; obj.bad = !!bad;
+      this.frame = 0;
       obj.edges.material.color.set(bad ? COL.bad : sel ? COL.accent : 0x101317);
       obj.edges.material.opacity = bad || sel ? 1 : 0.55;
       for (const m of obj.mats) m.emissive.set(bad ? 0x5a1414 : sel ? 0x0d2e29 : 0x000000);
@@ -439,6 +552,9 @@ export class Scene3D {
   // ---------------- modes ----------------
   setMode(mode, startPose) {
     this.mode = mode;
+    for (const obj of this.itemObjs.values()) obj.label.userData.want = obj.group.visible && mode !== 'walk';
+    this.insetKey = '';
+    this.applyInsets();
     this.scene.background.set(mode === 'walk' ? 0xb4c3cf : 0x0b0d10);
     if (mode === 'walk') {
       this.controls.enabled = false;
@@ -447,11 +563,11 @@ export class Scene3D {
     } else {
       this.walk.disable();
       this.controls.enabled = true;
+      this.camera.fov = 50; this.camera.updateProjectionMatrix();
       if (this.savedOrbit) {
         this.camera.position.copy(this.savedOrbit.pos);
         this.controls.target.copy(this.savedOrbit.target);
-      }
-      this.camera.fov = 50; this.camera.updateProjectionMatrix();
+      } else if (!this.userMoved) this.fit();
     }
     this.refreshLabelVisibility();
   }
@@ -462,6 +578,8 @@ export class Scene3D {
 
   tick() {
     const dt = Math.min(0.05, this.clock.getDelta());
+    // the bottom sheet moved: re-centre the projection (and re-frame if the user has not moved the camera)
+    if (this.applyInsets() && this.mode === 'orbit' && !this.userMoved) this.fit();
     if (this.mode === 'walk') this.walk.update(dt);
     else {
       this.controls.update();
@@ -482,6 +600,7 @@ export class Scene3D {
     }
     if (this.ring) { const s = 1 + 0.35 * Math.sin(performance.now() / 220); this.ring.scale.set(s, s, s); }
     this.hooks.onTick?.(dt);
+    if (this.frame++ % 3 === 0) this.cullLabels();
     this.renderer.render(this.scene, this.camera);
     this.labels.render(this.scene, this.camera);
   }

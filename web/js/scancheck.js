@@ -38,15 +38,86 @@ const ICONS = {
 
 const DECISION_LABEL = { accept: 'Accepted', rescan: 'Rescan requested', ask: 'Question asked' };
 
-function qaBlock(qa) {
+// ---------------------------------------------------------------- QA findings
+// Long QA lists are noisy: group them by room, rank them, show the top two and
+// fold the rest behind "Show all N". Wall ids get a friendly position.
+const SEV = { error: 3, warn: 2, info: 1 };
+const ACT = { rescan: 20, marker: 15 };
+const CODE = { WALL_LOW_COVERAGE: 9, CORNER_UNSEEN: 8, WALL_GAP: 7, WALL_LOW_DENSITY: 4, WALL_OCCLUDED: 1 };
+
+function qaScore(q) {
+  const t = q.target || {};
+  const extent = t.to != null && t.from != null ? (t.to - t.from) * Math.max(0.2, (t.y_to ?? 2) - (t.y_from ?? 0)) : 0;
+  return (SEV[q.severity] || 1) * 100 + (ACT[q.action] || 0) + (CODE[q.code] || 2) + Math.min(5, extent * 2);
+}
+
+const lenTxt = (m) => (m < 1 ? `${Math.max(1, Math.round(m * 100))} cm` : `${m.toFixed(2)} m`);
+function heightTxt(t) {
+  if (t.y_from == null || t.y_to == null) return '';
+  if (t.y_to - t.y_from > 1.6) return ', floor to ceiling';
+  if (t.y_from < 0.15) return `, the bottom ${lenTxt(t.y_to)}`;
+  return `, ${t.y_from.toFixed(1)}-${t.y_to.toFixed(1)} m up`;
+}
+
+// Plain-language version of a pipeline finding (the original stays in the tooltip).
+export function friendlyQa(q) {
+  const t = q.target || {};
+  const span = t.from != null && t.to != null ? t.to - t.from : null;
+  switch (q.code) {
+    case 'WALL_GAP': return span != null ? `No scan data on a ${lenTxt(span)} stretch${heightTxt(t)}. Rescan it.` : q.message;
+    case 'WALL_LOW_DENSITY': return span != null ? `Thin data on a ${lenTxt(span)} patch${heightTxt(t)}. Sweep it again slowly from 1-2 m away.` : q.message;
+    case 'WALL_LOW_COVERAGE': return String(q.message || '').replace(/\bwall\s+\w+/i, 'this wall');
+    case 'WALL_OCCLUDED': return `Partly hidden behind furniture${span != null ? ` (${lenTxt(span)})` : ''}. Fine to accept.`;
+    case 'CORNER_UNSEEN': return 'This corner is barely seen. Point the phone into it and rescan.';
+    default: return q.message || '';
+  }
+}
+
+// Older saved attempts have "Room name: message"; newer ones carry q.room.
+function splitRoom(q) {
+  if (q.room) return q;
+  const m = /^([^:]{1,40}):\s+(.*)$/.exec(q.message || '');
+  return m ? { ...q, room: m[1], message: m[2] } : q;
+}
+
+function qaItem(q, describeWall) {
+  const warn = q.severity === 'warn' || q.severity === 'error';
+  const tag = q.action === 'rescan' ? 'Rescan' : q.action === 'marker' ? 'Add a marker' : warn ? 'Check' : 'Note';
+  const t = q.target || {};
+  let where = '';
+  if (t.wall) {
+    const d = describeWall?.(q.room, t.wall) || {};
+    const txt = `${d.side ? `${d.side} wall` : `wall ${t.wall}`}`;
+    where = ` · <button class="link" type="button" data-act="showwall" data-wall="${esc(t.wall)}"${d.roomId ? ` data-room="${esc(d.roomId)}"` : ''}>${esc(txt)}</button>${d.side ? ` <span class="wid">${esc(t.wall)}</span>` : ''}${d.feature ? ` <span class="wid">${esc(d.feature)}</span>` : ''}`;
+  } else if (Array.isArray(t.corner)) {
+    where = ` · corner <span class="wid">${esc(t.corner.join('/'))}</span>`;
+  }
+  return `<div class="q ${warn ? 'warn' : 'info'}" title="${esc(q.message)}"><span class="dot"></span><div>
+    <div class="tag ${warn ? '' : 'info'}">${esc(tag)}${where}</div>
+    ${esc(friendlyQa(q))}</div></div>`;
+}
+
+// qa: [{severity, code, message, action, target, room?}]; open: Set of room names whose list is expanded.
+export function qaGroupsHtml(qa, { describeWall, open = new Set(), top = 2 } = {}) {
   if (!qa.length) return '<div class="subtle">The pipeline found nothing to flag.</div>';
-  return `<div class="qa">${qa.map((q) => {
-    const warn = q.severity === 'warn' || q.severity === 'error';
-    const tag = q.action === 'rescan' ? 'Rescan suggested' : q.action === 'marker' ? 'Add a marker' : warn ? 'Check' : 'Note';
-    const wall = q.target?.wall;
-    return `<div class="q ${warn ? 'warn' : 'info'}"><span class="dot"></span><div>
-      <div class="tag ${warn ? '' : 'info'}">${esc(tag)}${wall ? ` · <button class="link" type="button" data-act="showwall" data-wall="${esc(wall)}">wall ${esc(wall)}</button>` : ''}</div>
-      ${esc(q.message)}</div></div>`;
+  const groups = new Map();
+  for (const raw of qa) {
+    const q = splitRoom(raw);
+    const k = q.room || '';
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(q);
+  }
+  const named = groups.size > 1 || [...groups.keys()][0] !== '';
+  return `<div class="qa">${[...groups].map(([room, list]) => {
+    const sorted = [...list].sort((a, b) => qaScore(b) - qaScore(a));
+    const fix = list.filter((q) => q.action === 'rescan' || q.action === 'marker').length;
+    const head = named ? `<div class="qa-room"><b>${esc(room || 'Scan')}</b><span>${fix ? `${fix} to rescan` : 'looks fine'}${list.length > fix ? ` · ${list.length - fix} note${list.length - fix > 1 ? 's' : ''}` : ''}</span></div>` : '';
+    const first = sorted.slice(0, top).map((q) => qaItem(q, describeWall)).join('');
+    const rest = sorted.slice(top);
+    const more = rest.length ? `<details class="qa-more" data-room="${esc(room)}" ${open.has(room) ? 'open' : ''}>
+        <summary><span class="when-closed">Show all ${sorted.length}</span><span class="when-open">Show fewer</span></summary>
+        <div class="qa-rest">${rest.map((q) => qaItem(q, describeWall)).join('')}</div></details>` : '';
+    return `<div class="qa-group">${head}${first}${more}</div>`;
   }).join('')}</div>`;
 }
 
@@ -104,7 +175,7 @@ function historyBlock(attempts, currentId) {
   </div>`;
 }
 
-export function scanCardHtml({ scan, attempts, coach, traceOpen }) {
+export function scanCardHtml({ scan, attempts, coach, traceOpen, describeWall, qaOpen }) {
   const meta = [`attempt ${scan.n}`, scan.processing_s != null ? `measured in ${scan.processing_s} s` : null].filter(Boolean).join(' · ');
   let coachHtml;
   if (coach?.pending) {
@@ -122,7 +193,7 @@ export function scanCardHtml({ scan, attempts, coach, traceOpen }) {
       <div class="subtle">The coach looks at the evidence and says whether the scan is good enough, or exactly what to rescan.</div>`;
   }
   return `<div class="card-h"><h2>Scan check</h2><span class="muted small">${esc(meta)}</span></div>
-    ${qaBlock(scan.qa || [])}
+    ${qaGroupsHtml(scan.qa || [], { describeWall, open: qaOpen })}
     ${coachHtml}
     ${historyBlock(attempts, scan.id)}`;
 }

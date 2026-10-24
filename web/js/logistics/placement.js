@@ -23,7 +23,7 @@ export function evaluatePlacement(world, items) {
     }
     for (const ob of world.obstacles) {
       if (ob.ymax <= 0.05) continue;
-      if (obbOverlap(shrunk, obstacleObb(ob), 1e-4)) problems.push({ kind: 'obstacle', ref: ob.key, text: `Overlaps the existing ${ob.label}` });
+      if (obbOverlap(shrunk, obstacleObb(ob), 1e-4)) problems.push({ kind: 'obstacle', ref: ob.key, text: `Overlaps the existing ${/^(unknown|obstacle|object)?$/i.test(ob.label || '') ? 'furniture' : ob.label}` });
     }
     for (const { it: other, o: oo } of obbs) {
       if (other.id === it.id) continue;
