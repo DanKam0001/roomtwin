@@ -6,7 +6,7 @@ or existing footage.
 
 | # | time | on screen | voice (Danish) |
 |---|---|---|---|
-| 1 | 0:00-0:20 | **[YOU]** facing the camera, in the bedroom | "This is my bedroom. Every time you buy furniture or move house, it's the same question: will it fit? Tape measures and guesswork don't tell you whether something fits *through the door, round the corner, in the right order*. So I built RoomTwin." |
+| 1 | 0:00-0:20 | **[YOU]** facing the camera, in the bedroom | "Half of furniture buyers in a recent UK survey have ordered something that didn't fit through the door or up the stairs. That's a return, a restocking fee and a wasted delivery trip. RoomTwin answers it before you buy: will it fit through the door, round the corner, in the right order?" |
 | 2 | 0:20-0:40 | scan screen recording (`raw/scan_screenrec.mp4`), sped up 6x: the hallway, then the bedroom, the mesh building | "I scan the room with my iPhone's LiDAR in about two minutes, using a free scanner app, and export the raw point cloud: two million points." |
 | 3 | 0:40-1:05 | clip 01 (phone, upload/first run), then clip 02 (plan with ± values) | "RoomTwin uploads it to AWS, where my OpenCV 5 pipeline measures it in 13 seconds. It finds the floor, splits the scan into rooms at the doorways, fits every wall, and finds the door and window. Every measurement shows its uncertainty: 4.81 metres, plus or minus 1 centimetre." |
 | 4 | 1:05-1:30 | **[YOU]** tape on the wall, cut to the comparison table | "Does it hold up? Tape says ___, RoomTwin says ___." (Fill in the real numbers tonight.) |

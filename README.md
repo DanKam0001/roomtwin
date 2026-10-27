@@ -1,5 +1,12 @@
 # RoomTwin
 
+**Will it fit?** In a 2025 survey of 1,500 UK furniture buyers, 49% had ordered furniture that
+didn't fit through the door or couldn't get up the stairs
+([Fixtuur](https://furniturenews.net/resources/more-shoppers-now-try-buy-and-return-furniture-reports-fixtuur)).
+Each failure means a return, a 10-20% restocking fee and a wasted delivery trip. RoomTwin answers
+the question before anyone buys or loads a truck. It is built for furniture retailers (a "fits your
+home?" check by the Buy button), removalists, and their customers.
+
 Scan a room with a LiDAR phone and get a measured digital twin you can plan with. An OpenCV 5
 pipeline on AWS Graviton turns the raw point cloud into walls with lengths and an uncertainty
 each, doors and windows with clear width and height, furniture boxes and a coverage report. A scan

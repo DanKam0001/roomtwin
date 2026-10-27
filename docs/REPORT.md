@@ -498,4 +498,4 @@ Expectation, stated before measuring: on real data `sigma` is likely too small (
 | real scan (8.5) | `python -m roomtwin.process Room_19_32_48.ply -o out/bedroom1` | `room.json`, `house.json` |
 | agent traces (6.3) | upload the scan in the web app, then press "Ask the coach" | `docs/coach_trace_*.json` |
 
-The real iPhone scan is not in the repository, because it is a private home.
+The raw iPhone scan (the point cloud) is not in the repository. Its derived floor plan (`web/samples/house_real.json`: wall lengths, openings and furniture boxes, with no photos or location) is included with the author's consent so the live demo works on a real home.

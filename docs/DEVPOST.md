@@ -6,7 +6,7 @@ RoomTwin
 
 ## Tagline (under 200 characters)
 
-Scan a room with a LiDAR phone; OpenCV 5 on AWS measures every wall with an error bar, an agent asks for a rescan where needed, and you check furniture fits through the door.
+Will it fit? Scan your room with an iPhone and RoomTwin tells you before you buy: through the door, round the corner, in the right order. OpenCV 5 on AWS, measured with error bars.
 
 ## Categories / prizes
 
@@ -21,6 +21,19 @@ COOL (Cloud-Optimized OpenCV Library) is not used in this entry, so it is not en
 * Code: (repository link)
 * Video: (link, under 5 minutes)
 * Technical report: docs/REPORT.md in the repository
+
+## The problem, and who pays for it
+
+Furniture that doesn't fit is a common, expensive failure:
+
+* **How common:** in a 2025 survey of 1,500 UK furniture buyers, **49% had ordered furniture that didn't fit through the door or couldn't get up the stairs**, and 60% had bought furniture online that turned out to be the wrong size ([Fixtuur, "Rise of Returniture", 2025](https://furniturenews.net/resources/more-shoppers-now-try-buy-and-return-furniture-reports-fixtuur)). That is a self-reported survey, not a measured return rate.
+* **What it costs:** restocking fees typically run **10-20% of the price** ([Consumer Reports, via Money](https://money.com/restocking-fee-furniture-problem-solved/)). On a $1,000 sofa that is $100-200 for the customer before return freight. The retailer still pays for two delivery trips and a damaged-returns risk.
+
+The buyers are the people who pay for that failed delivery:
+
+* **Furniture retailers**, with a "will it fit your home?" check next to the Buy button. RoomTwin already reads IKEA product pages, including the flat-pack box sizes.
+* **Removalists and delivery companies**, who can quote the right crew and plan which items to carry in boxed or tilted, before the truck leaves.
+* The customer themselves, before spending the money.
 
 ## Inspiration
 
