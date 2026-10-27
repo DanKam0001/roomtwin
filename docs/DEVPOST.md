@@ -18,7 +18,7 @@ COOL (Cloud-Optimized OpenCV Library) is not used in this entry, so it is not en
 ## Links
 
 * Live app: https://54-226-102-179.sslip.io/
-* Code: (repository link)
+* Code: https://github.com/DanKam0001/roomtwin
 * Video: (link, under 5 minutes)
 * Technical report: docs/REPORT.md in the repository
 
