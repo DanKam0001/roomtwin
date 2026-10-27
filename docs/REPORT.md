@@ -411,20 +411,30 @@ wall lengths change by at most 0.8 cm.
 
 #### Tape-measure comparison
 
-> **TABLE PLACEHOLDER: tape-measure readings to be added.** error = RoomTwin − tape. The project's
-> done-condition is within ±5 cm on 3-4 walls.
+Measured by tape on 27 Oct 2026 (filmed; the readings are spoken on camera, so "roughly" values are
+rounded to the nearest centimetre or two). error = RoomTwin - tape.
 
-| item | tape | RoomTwin | error | sigma | within 2 sigma? |
+| item | tape | RoomTwin | error | sigma | verdict |
 |---|---|---|---|---|---|
-| w0 | _TBD_ | 1.993 m | _TBD_ | 0.60 cm | _TBD_ |
-| w1 | _TBD_ | 0.603 m | _TBD_ | 0.18 cm | _TBD_ |
-| w2 | _TBD_ | 0.997 m | _TBD_ | 0.30 cm | _TBD_ |
-| w3 | _TBD_ | 4.809 m | _TBD_ | 1.44 cm | _TBD_ |
-| w4 | _TBD_ | 2.958 m | _TBD_ | 0.89 cm | _TBD_ |
-| w5 | _TBD_ | 4.176 m | _TBD_ | 1.26 cm | _TBD_ |
-| ceiling | _TBD_ | 2.399 m | _TBD_ | 0.72 cm | _TBD_ |
-| door width | _TBD_ | 0.768 m | _TBD_ | 2.99 cm | _TBD_ |
-| window width | _TBD_ | 1.694 m | _TBD_ | 2.42 cm | _TBD_ |
+| w3, door wall (4.8 m long wall) | 4.81 m | 4.809 m | -0.1 cm | 1.44 cm | match |
+| w1, the step | ~0.60 m | 0.603 m | +0.3 cm | 0.18 cm | match |
+| w2, lower part of the stepped wall | ~0.95 m | 0.997 m | +4.7 cm | 0.30 cm | within the 5 cm goal, far outside sigma |
+| ceiling height | ~2.38-2.40 m | 2.399 m | 0 to +2 cm | 0.72 cm | match |
+| door width | ~0.86 m | 0.768 m | -9 cm | 2.99 cm | **miss** (see below) |
+| window width | ~1.77 m | 1.694 m | -7.6 cm | 2.42 cm | **miss** (different reference, see below) |
+
+Result: the two long-wall and ceiling checks agree to about a centimetre, which meets the
+done-condition of ±5 cm on the main walls. Two openings miss, and one short wall is outside its sigma:
+
+* **Door (-9 cm).** The tape went across the closed door, and probably caught part of the frame. RoomTwin
+  measures the closed, flush door from the gaps around its leaf, so it is not yet clear which number
+  is the clear opening that furniture actually passes through. Either way, the sofa verdict in the demo
+  holds: the EKTORP is 88 cm deep, and with 2 cm clearance it needs at least 90 cm. A follow-up is a
+  jamb-to-jamb tape reading with the door open, plus a scan with the door open.
+* **Window (-7.6 cm).** RoomTwin measured the window on the closed blind (section 9.1). The tape measured
+  the frame. These are different things, so this is a known limitation, not noise.
+* **w2 (+4.7 cm vs a 0.3 cm sigma).** This is the short wall next to the door, where drift between
+  scanning passes left ghost layers (section 9.1). It confirms that sigma is optimistic on real data.
 
 Expectation, stated before measuring: on real data `sigma` is likely too small (see 9.2), and
 `inlier_rms` is the better indicator of trouble.
@@ -452,8 +462,8 @@ Expectation, stated before measuring: on real data `sigma` is likely too small (
 * **Synthetic noise is too kind.** Real LiDAR has range-dependent, correlated noise, multipath in
   corners, and mesh smoothing. The sub-centimetre synthetic errors show the geometry is right; they
   do not predict real accuracy.
-* **The real ground truth is the tape table above.** The 0.3 % scale term is an assumption until the
-  ArUco check runs on the real phone.
+* **Real ground truth is the tape table in 8.5:** the main walls and ceiling agree to about 1 cm; the door
+  and window miss by 8-9 cm, for the reasons given there.
 * **The agent has two recorded traces**, not a measured success rate.
 
 ### 9.3 Model limits

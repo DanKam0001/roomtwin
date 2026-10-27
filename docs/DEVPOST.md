@@ -63,6 +63,7 @@ Every move ends with the same questions: will the sofa fit against that wall, wi
 
 ## Accomplishments that we're proud of
 
+* Checked against a tape measure in a real bedroom: the 4.81 m wall came out as 4.809 m, the 60 cm step as 60.3 cm, and the ceiling as 2.399 m (tape about 2.38-2.40 m). We also report the misses: the door was 9 cm off, and the window 7.6 cm off because it was measured on the blind (see the report).
 * Synthetic rooms with exact ground truth: every wall found, wall-length errors at most 0.4 cm, ceilings within 0.1 cm, openings within 1.4 cm, top-view furniture IoU 0.93-0.98.
 * 48 of 48 sweep scans pass (4 room shapes x 6 seeds x 5 / 10 mm noise, random yaw, y-up / z-up): worst wall 0.62 cm, worst opening 2.29 cm.
 * Two-room house test: both rooms found every time, the door detected from both sides and paired within 0.95 cm.
@@ -78,7 +79,7 @@ Every move ends with the same questions: will the sofa fit against that wall, wi
 
 ## What's next
 
-* Fill in the tape-measure comparison on the real bedroom and publish it, error bars included.
+* Re-measure the door jamb to jamb with the door open, and scan with the door open, to settle the 9 cm door discrepancy.
 * Measure the coach's success rate on labelled good and bad scans, with and without injected defects.
 * Register rooms to each other (shared-wall constraints) to remove the inter-room drift.
 * Use the ARKit RGB-D export with poses as the default input, and run the ArUco scale check on real scans.
